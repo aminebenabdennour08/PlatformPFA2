@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .step-badge {
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    .status-valide { 
+        background-color: #d1fae5; 
+        color: #065f46; 
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+    }
+    .status-rejete { 
+        background-color: #fee2e2; 
+        color: #dc2626; 
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+    }
+    .status-direct { 
+        background-color: #dbeafe; 
+        color: #1e40af; 
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+    }
+    .filter-card {
+        background-color: #f8fafc;
+        border-radius: 12px;
+    }
+</style>
+
+<h2 class="mb-4"><i class="fas fa-history"></i> Historique des consultations</h2>
+
+<!-- Filtres -->
+<div class="card filter-card mb-4">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-filter"></i> Filtrer les consultations
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <input type="text" id="searchId" class="form-control" placeholder="ID Patient">
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="text" id="searchName" class="form-control" placeholder="Nom du patient">
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="date" id="searchDate" class="form-control">
+            </div>
+            <div class="col-md-2 mb-2">
+                <button id="searchBtn" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Rechercher
+                </button>
+            </div>
+            <div class="col-md-1 mb-2">
+                <button id="clearBtn" class="btn btn-secondary w-100">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Liste des consultations -->
+<div class="card">
+    <div class="card-header bg-secondary text-white">
+        <i class="fas fa-list"></i> Consultations terminées
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>ID Patient</th>
+                        <th>Patient</th>
+                        <th>Date / Heure</th>
+                        <th>Diagnostic</th>
+                        <th>Stade</th>
+                        <th>Statut</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Mapping des classes
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'normal': 'Normal'
+};
+
+let allCompletedConsultations = [];
+
+// Formater la date et l'heure
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+}
+
+// Obtenir le badge de statut
+function getStatusBadge(consult) {
+    if (consult.directValidation === true) {
+        return '<span class="status-direct">✅ Validation directe</span>';
+    }
+    if (consult.status === 'valide') {
+        return '<span class="status-valide">✅ Diagnostic validé</span>';
+    }
+    if (consult.status === 'rejete') {
+        return '<span class="status-rejete">✏️ Diagnostic corrigé</span>';
+    }
+    return '<span class="status-pending">📝 En attente</span>';
+}
+
+// Obtenir le diagnostic
+function getDiagnosis(consult) {
+    if (consult.directValidation === true) {
+        return 'Normal - Pas de signes de cancer';
+    }
+    if (consult.finalDiagnosis) {
+        return classNames[consult.finalDiagnosis.predictedClass] || consult.finalDiagnosis.predictedClass;
+    }
+    if (consult.vitResults) {
+        return classNames[consult.vitResults.predictedClass] || consult.vitResults.predictedClass;
+    }
+    return '-';
+}
+
+// Obtenir le stade
+function getStage(consult) {
+    if (consult.directValidation === true) {
+        return 'Stade 0';
+    }
+    if (consult.finalDiagnosis && consult.finalDiagnosis.stage) {
+        return consult.finalDiagnosis.stage;
+    }
+    if (consult.staging && consult.staging.stage) {
+        return consult.staging.stage;
+    }
+    return '-';
+}
+
+// Afficher les consultations
+function displayConsultations(consultations) {
+    const tbody = $('#historyTable tbody');
+    tbody.empty();
+    
+    if (consultations.length === 0) {
+        tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune consultation trouvée</td></tr>');
+        return;
+    }
+    
+    consultations.forEach(consult => {
+        if (!consult || !consult.patient) return;
+        
+        const patientId = consult.patientId || `PAT-${consult.id.toString().slice(-4)}`;
+        const diagnosis = getDiagnosis(consult);
+        const stage = getStage(consult);
+        const statusBadge = getStatusBadge(consult);
+        
+        tbody.append(`
+            <tr>
+                <td><code>${patientId}</code></td>
+                <td>
+                    <strong>${consult.patient.name || 'Inconnu'}</strong><br>
+                    <small class="text-muted">${consult.patient.age || '?'} ans</small>
+                </td>
+                <td><small>${formatDateTime(consult.createdAt)}</small></td>
+                <td><strong>${diagnosis}</strong></td>
+                <td>${stage}</td>
+                <td>${statusBadge}</td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="viewDetails(${consult.id})">
+                        <i class="fas fa-file-alt"></i> Détails
+                    </button>
+                 </td>
+            </tr>
+        `);
+    });
+}
+
+// Voir les détails d'une consultation
+function viewDetails(consultationId) {
+    window.location.href = `/report?consultation_id=${consultationId}`;
+}
+
+// Charger l'historique
+function loadHistory() {
+    const allConsultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+    // Filtrer uniquement les consultations terminées
+    allCompletedConsultations = allConsultations.filter(c => 
+        c.status === 'valide' || 
+        c.status === 'rejete' || 
+        c.directValidation === true
+    );
+    allCompletedConsultations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    displayConsultations(allCompletedConsultations);
+}
+
+// Rechercher des consultations
+function searchConsultations() {
+    const searchId = $('#searchId').val().toLowerCase().trim();
+    const searchName = $('#searchName').val().toLowerCase().trim();
+    const searchDate = $('#searchDate').val();
+    
+    let results = [...allCompletedConsultations];
+    
+    if (searchId) {
+        results = results.filter(c => (c.patientId || '').toLowerCase().includes(searchId) || 
+                                      c.id.toString().includes(searchId));
+    }
+    
+    if (searchName) {
+        results = results.filter(c => c.patient.name.toLowerCase().includes(searchName));
+    }
+    
+    if (searchDate) {
+        results = results.filter(c => {
+            const consultDate = new Date(c.createdAt).toLocaleDateString();
+            return consultDate === new Date(searchDate).toLocaleDateString();
+        });
+    }
+    
+    displayConsultations(results);
+}
+
+// Effacer la recherche
+function clearSearch() {
+    $('#searchId, #searchName, #searchDate').val('');
+    displayConsultations(allCompletedConsultations);
+}
+
+// Initialisation
+$(document).ready(function() {
+    loadHistory();
+    
+    $('#searchBtn').click(searchConsultations);
+    $('#clearBtn').click(clearSearch);
+    
+    let searchTimeout;
+    $('#searchId, #searchName, #searchDate').on('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(searchConsultations, 500);
+    });
+});
+</script>
+{% endblock %}

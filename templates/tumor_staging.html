@@ -1,0 +1,561 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .step-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        padding: 0 20px;
+    }
+    .step {
+        text-align: center;
+        flex: 1;
+    }
+    .step .circle {
+        width: 40px;
+        height: 40px;
+        background-color: #e5e7eb;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-weight: bold;
+        color: #6b7280;
+    }
+    .step.completed .circle {
+        background-color: #10b981;
+        color: white;
+    }
+    .step.active .circle {
+        background-color: #3b82f6;
+        color: white;
+    }
+    .step .label {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    .step.active .label {
+        color: #3b82f6;
+        font-weight: bold;
+    }
+    .decision-card {
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .decision-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .info-badge {
+        background-color: #dbeafe;
+        color: #1e40af;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        display: inline-block;
+        margin-bottom: 15px;
+    }
+    .suspicion-card {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border-left: 4px solid #f59e0b;
+        padding: 15px 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    .stage-calculator {
+        background-color: #f0fdf4;
+        border-radius: 12px;
+        padding: 15px;
+        border: 1px solid #bbf7d0;
+    }
+    .test-option {
+        background-color: #f8fafc;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+</style>
+
+<div class="step-indicator">
+    <div class="step completed">
+        <div class="circle">1</div>
+        <div class="label">Consultation</div>
+    </div>
+    <div class="step completed">
+        <div class="circle">2</div>
+        <div class="label">CT Scan</div>
+    </div>
+    <div class="step completed">
+        <div class="circle">3</div>
+        <div class="label">Analyse IA</div>
+    </div>
+    <div class="step active">
+        <div class="circle">4</div>
+        <div class="label">Décision</div>
+    </div>
+    <div class="step">
+        <div class="circle">5</div>
+        <div class="label">Finalisation</div>
+    </div>
+</div>
+
+<h2 class="mb-4">
+    <i class="fas fa-chart-line"></i> 
+    Décision après analyse ViT-16
+</h2>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    <strong>Patient:</strong> <span id="patientName"></span> | 
+    <strong>ID:</strong> <span id="patientId"></span> |
+    <strong>Âge:</strong> <span id="patientAge"></span> ans |
+    <strong>Prédiction ViT-16:</strong> <span id="vitPrediction"></span>
+</div>
+
+<!-- Résumé de la prédiction -->
+<div class="suspicion-card">
+    <div class="row align-items-center">
+        <div class="col-auto">
+            <i class="fas fa-robot fa-2x text-warning"></i>
+        </div>
+        <div class="col">
+            <strong>Rappel - Résultat ViT-16:</strong><br>
+            La ViT-16 a analysé le CT scan et prédit un <strong id="vitClass"></strong> 
+            avec une confiance de <strong id="vitConfidence"></strong>%.
+        </div>
+    </div>
+</div>
+
+<!-- Choix du médecin -->
+<div class="row mb-5">
+    <div class="col-md-6 mb-3">
+        <div class="card decision-card h-100" id="confirmCard">
+            <div class="card-body text-center p-4">
+                <div class="display-1 text-success mb-3">✅</div>
+                <h4>Je confirme le diagnostic</h4>
+                <p class="text-muted">Le sous-type et le stade sont clairs après analyse du CT scan et de la ViT-16</p>
+                <hr>
+                <p class="small text-success"><i class="fas fa-check-circle"></i> Le patient peut commencer le traitement</p>
+                <button class="btn btn-success mt-3 px-4" id="selectConfirm">Choisir cette option</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card decision-card h-100" id="additionalTestsCard">
+            <div class="card-body text-center p-4">
+                <div class="display-1 text-warning mb-3">🔬</div>
+                <h4>Examens complémentaires nécessaires</h4>
+                <p class="text-muted">Le sous-type ou le stade n'est pas clair, des examens supplémentaires sont requis</p>
+                <hr>
+                <p class="small text-warning"><i class="fas fa-flask"></i> Biopsie, PET/CT, tests génétiques...</p>
+                <button class="btn btn-warning mt-3 px-4" id="selectAdditional">Choisir cette option</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Section Confirmation (visible quand le médecin confirme) -->
+<div id="confirmSection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-check-circle"></i> Confirmation du diagnostic
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-badge">
+                        <i class="fas fa-microscope"></i> Sous-type
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Confirmer le sous-type</label>
+                        <select id="confirmSubtype" class="form-select">
+                            <option value="">Sélectionner...</option>
+                            <option value="adenocarcinoma">Adénocarcinome</option>
+                            <option value="squamous.cell.carcinoma">Carcinome épidermoïde</option>
+                            <option value="large.cell.carcinoma">Carcinome à grandes cellules</option>
+                            <option value="normal">Normal</option>
+                        </select>
+                    </div>
+                    
+                    <div class="info-badge mt-3">
+                        <i class="fas fa-map-marker-alt"></i> Localisation
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Position de la tumeur</label>
+                        <select id="tumorLocation" class="form-select">
+                            <option value="">Sélectionner...</option>
+                            <option value="lobe_superieur_droit">Lobe supérieur droit</option>
+                            <option value="lobe_moyen_droit">Lobe moyen droit</option>
+                            <option value="lobe_inferieur_droit">Lobe inférieur droit</option>
+                            <option value="lobe_superieur_gauche">Lobe supérieur gauche</option>
+                            <option value="lobe_inferieur_gauche">Lobe inférieur gauche</option>
+                            <option value="hilum">Hile pulmonaire</option>
+                            <option value="mediastin">Médiastin</option>
+                            <option value="pleurale">Pleural</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Description localisation</label>
+                        <textarea id="locationDescription" rows="2" class="form-control" 
+                            placeholder="Précisez la position exacte..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="info-badge">
+                        <i class="fas fa-chart-simple"></i> Stade clinique (cTNM)
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Taille de la tumeur (cm)</label>
+                        <input type="number" id="tumorSize" class="form-control" step="0.1" placeholder="ex: 3.5">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">T</label>
+                            <select id="tClass" class="form-select">
+                                <option value="">Choisir...</option>
+                                <option value="T1">T1 - ≤3 cm</option>
+                                <option value="T2">T2 - >3-5 cm</option>
+                                <option value="T3">T3 - >5-7 cm</option>
+                                <option value="T4">T4 - >7 cm</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">N</label>
+                            <select id="nClass" class="form-select">
+                                <option value="">Choisir...</option>
+                                <option value="N0">N0 - Aucun</option>
+                                <option value="N1">N1 - Hilaires</option>
+                                <option value="N2">N2 - Médiastinaux</option>
+                                <option value="N3">N3 - Controlatéraux</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">M</label>
+                            <select id="mClass" class="form-select">
+                                <option value="">Choisir...</option>
+                                <option value="M0">M0 - Absentes</option>
+                                <option value="M1">M1 - Présentes</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="stage-calculator mt-2">
+                        <i class="fas fa-calculator"></i>
+                        <strong>Stade calculé:</strong> 
+                        <span id="calculatedStage" class="badge bg-success fs-6 ms-2">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3 mt-3">
+                <label class="form-label fw-bold">Notes médicales</label>
+                <textarea id="confirmationNotes" rows="2" class="form-control" 
+                    placeholder="Justification du diagnostic, plan thérapeutique..."></textarea>
+            </div>
+            
+            <button id="saveAndFinalizeBtn" class="btn btn-success btn-lg w-100">
+                <i class="fas fa-check-circle"></i> Finaliser le diagnostic
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Section Examens complémentaires -->
+<div id="additionalTestsSection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <i class="fas fa-flask"></i> Prescription d'examens complémentaires
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Diagnostic non confirmé</strong><br>
+                Des examens supplémentaires sont nécessaires pour confirmer le sous-type et le stade.
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-badge"><i class="fas fa-x-ray"></i> Imagerie</div>
+                    <div class="test-option">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="recPET" value="PET/CT">
+                            <label class="form-check-label fw-bold">PET/CT</label>
+                        </div>
+                    </div>
+                    <div class="test-option">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="recMRI" value="IRM cérébrale">
+                            <label class="form-check-label fw-bold">IRM cérébrale</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-badge"><i class="fas fa-microscope"></i> Biopsies</div>
+                    <div class="test-option">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="recBiopsy" value="Biopsie">
+                            <label class="form-check-label fw-bold">Biopsie / Anatomopathologie</label>
+                        </div>
+                    </div>
+                    <div class="test-option">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="recEBUS" value="EBUS">
+                            <label class="form-check-label fw-bold">EBUS</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <div class="info-badge"><i class="fas fa-dna"></i> Tests moléculaires</div>
+                <div class="row">
+                    <div class="col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" id="recEGFR" value="EGFR"><label>EGFR</label></div></div>
+                    <div class="col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" id="recALK" value="ALK"><label>ALK</label></div></div>
+                    <div class="col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" id="recROS1" value="ROS1"><label>ROS1</label></div></div>
+                    <div class="col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" id="recPDL1" value="PD-L1"><label>PD-L1</label></div></div>
+                </div>
+            </div>
+            
+            <div class="mb-3 mt-4">
+                <label class="form-label fw-bold">Justification / Hypothèses</label>
+                <textarea id="additionalNotes" rows="2" class="form-control" 
+                    placeholder="Pourquoi des examens complémentaires sont nécessaires ?"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-bold">Suspicion actuelle</label>
+                <select id="currentSuspicion" class="form-select">
+                    <option value="">Non déterminée</option>
+                    <option value="adenocarcinoma">Adénocarcinome (à confirmer)</option>
+                    <option value="squamous.cell.carcinoma">Carcinome épidermoïde (à confirmer)</option>
+                    <option value="large.cell.carcinoma">Carcinome à grandes cellules (à confirmer)</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-bold">Niveau d'urgence</label>
+                <select id="urgencyTests" class="form-select">
+                    <option value="routine">Routine (dans les semaines)</option>
+                    <option value="urgent">Urgent (dans les jours)</option>
+                    <option value="immediate">Immédiat (hospitalisation)</option>
+                </select>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <button id="savePrescriptionBtn" class="btn btn-primary btn-lg w-100">
+                        <i class="fas fa-save"></i> Enregistrer la prescription
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button id="goToTestsBtn" class="btn btn-success btn-lg w-100" style="display: none;">
+                        <i class="fas fa-flask"></i> Accéder aux examens
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Récupérer la consultation
+const consultationId = new URLSearchParams(window.location.search).get('consultation_id');
+let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+let currentConsultation = consultations.find(c => c.id == consultationId);
+
+if (!currentConsultation) {
+    currentConsultation = JSON.parse(localStorage.getItem('currentConsultation') || '{}');
+}
+
+if (!currentConsultation.id || !currentConsultation.vitResults) {
+    alert('⚠️ Aucune prédiction disponible');
+    window.location.href = '/upload';
+}
+
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'normal': 'Normal'
+};
+
+$('#patientName').text(currentConsultation.patient.name);
+$('#patientId').text(currentConsultation.patientId || 'N/A');
+$('#patientAge').text(currentConsultation.patient.age);
+$('#vitPrediction').html(`<strong>${classNames[currentConsultation.vitResults.predictedClass]}</strong>`);
+$('#vitClass').text(classNames[currentConsultation.vitResults.predictedClass]);
+$('#vitConfidence').text((currentConsultation.vitResults.confidence * 100).toFixed(1));
+
+// Afficher/masquer les sections
+$('#selectConfirm').click(function() {
+    $('#confirmSection').show();
+    $('#additionalTestsSection').hide();
+    $('html, body').animate({ scrollTop: $('#confirmSection').offset().top - 100 }, 500);
+});
+
+$('#selectAdditional').click(function() {
+    $('#confirmSection').hide();
+    $('#additionalTestsSection').show();
+    $('html, body').animate({ scrollTop: $('#additionalTestsSection').offset().top - 100 }, 500);
+});
+
+// Calcul du stade
+function calculateStage() {
+    const t = $('#tClass').val();
+    const n = $('#nClass').val();
+    const m = $('#mClass').val();
+    let stage = '-';
+    
+    if (t === 'T1' && n === 'N0' && m === 'M0') stage = 'Stade IA';
+    else if (t === 'T2' && n === 'N0' && m === 'M0') stage = 'Stade IB';
+    else if ((t === 'T1' || t === 'T2') && n === 'N1' && m === 'M0') stage = 'Stade IIB';
+    else if ((t === 'T1' || t === 'T2') && n === 'N2' && m === 'M0') stage = 'Stade IIIA';
+    else if ((t === 'T3' || t === 'T4') && n === 'N2' && m === 'M0') stage = 'Stade IIIB';
+    else if (m === 'M1') stage = 'Stade IV';
+    
+    $('#calculatedStage').text(stage);
+}
+
+$('#tClass, #nClass, #mClass, #tumorSize').on('change input', calculateStage);
+$('#confirmSubtype').val(currentConsultation.vitResults.predictedClass);
+
+// Enregistrer la prescription et afficher le bouton pour accéder aux tests
+function savePrescription() {
+    const additionalTestsData = {
+        decision: 'additional_tests_needed',
+        originalPrediction: currentConsultation.vitResults.predictedClass,
+        requestedTests: {
+            imaging: [],
+            invasive: [],
+            molecular: []
+        },
+        currentSuspicion: $('#currentSuspicion').val(),
+        urgency: $('#urgencyTests').val(),
+        notes: $('#additionalNotes').val(),
+        recordedAt: new Date().toISOString(),
+        status: 'prescribed'
+    };
+    
+    if ($('#recPET').is(':checked')) additionalTestsData.requestedTests.imaging.push('PET/CT');
+    if ($('#recMRI').is(':checked')) additionalTestsData.requestedTests.imaging.push('IRM cérébrale');
+    if ($('#recBiopsy').is(':checked')) additionalTestsData.requestedTests.invasive.push('Biopsie');
+    if ($('#recEBUS').is(':checked')) additionalTestsData.requestedTests.invasive.push('EBUS');
+    if ($('#recEGFR').is(':checked')) additionalTestsData.requestedTests.molecular.push('EGFR');
+    if ($('#recALK').is(':checked')) additionalTestsData.requestedTests.molecular.push('ALK');
+    if ($('#recROS1').is(':checked')) additionalTestsData.requestedTests.molecular.push('ROS1');
+    if ($('#recPDL1').is(':checked')) additionalTestsData.requestedTests.molecular.push('PD-L1');
+    
+    const totalTests = additionalTestsData.requestedTests.imaging.length + 
+                       additionalTestsData.requestedTests.invasive.length + 
+                       additionalTestsData.requestedTests.molecular.length;
+    
+    if (totalTests === 0) {
+        alert('Veuillez sélectionner au moins un examen');
+        return;
+    }
+    
+    currentConsultation.additionalTests = additionalTestsData;
+    currentConsultation.status = 'additional_tests_needed';
+    
+    const idx = consultations.findIndex(c => c.id === currentConsultation.id);
+    if (idx !== -1) consultations[idx] = currentConsultation;
+    localStorage.setItem('consultations', JSON.stringify(consultations));
+    localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+    
+    // Cacher le bouton d'enregistrement et afficher le bouton pour accéder aux tests
+    $('#savePrescriptionBtn').hide();
+    $('#goToTestsBtn').show();
+    
+    alert(`✅ ${totalTests} examen(s) prescrit(s) avec succès !\n\nCliquez sur "Accéder aux examens" pour ajouter les résultats.`);
+}
+
+// Aller à la page des examens complémentaires
+function goToTests() {
+    window.location.href = `/additional-tests?consultation_id=${currentConsultation.id}`;
+}
+
+// Finaliser le diagnostic (confirmation directe)
+$('#saveAndFinalizeBtn').click(function() {
+    const confirmedSubtype = $('#confirmSubtype').val();
+    if (!confirmedSubtype) {
+        alert('Veuillez confirmer le sous-type');
+        return;
+    }
+    
+    const stagingData = {
+        decision: 'confirmed',
+        confirmedSubtype: confirmedSubtype,
+        originalPrediction: currentConsultation.vitResults.predictedClass,
+        tumor: {
+            size: $('#tumorSize').val(),
+            location: $('#tumorLocation').val(),
+            locationDescription: $('#locationDescription').val(),
+            tClass: $('#tClass').val(),
+            nClass: $('#nClass').val(),
+            mClass: $('#mClass').val()
+        },
+        stage: $('#calculatedStage').text(),
+        notes: $('#confirmationNotes').val(),
+        recordedAt: new Date().toISOString()
+    };
+    
+    currentConsultation.staging = stagingData;
+    currentConsultation.finalSubtype = confirmedSubtype;
+    currentConsultation.status = 'valide';
+    
+    const idx = consultations.findIndex(c => c.id === currentConsultation.id);
+    if (idx !== -1) consultations[idx] = currentConsultation;
+    localStorage.setItem('consultations', JSON.stringify(consultations));
+    localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+    
+    alert('✅ Diagnostic confirmé et finalisé !');
+    window.location.href = '/dashboard';
+});
+
+// Écouteurs
+$('#savePrescriptionBtn').click(savePrescription);
+$('#goToTestsBtn').click(goToTests);
+
+// Vérifier si une prescription existe déjà
+function checkExistingPrescription() {
+    if (currentConsultation.additionalTests && currentConsultation.additionalTests.decision === 'additional_tests_needed') {
+        // Une prescription existe déjà, afficher directement le bouton pour accéder aux tests
+        $('#savePrescriptionBtn').hide();
+        $('#goToTestsBtn').show();
+        
+        // Charger les données existantes
+        $('#currentSuspicion').val(currentConsultation.additionalTests.currentSuspicion);
+        $('#urgencyTests').val(currentConsultation.additionalTests.urgency);
+        $('#additionalNotes').val(currentConsultation.additionalTests.notes);
+        
+        const tests = currentConsultation.additionalTests.requestedTests;
+        if (tests.imaging.includes('PET/CT')) $('#recPET').prop('checked', true);
+        if (tests.imaging.includes('IRM cérébrale')) $('#recMRI').prop('checked', true);
+        if (tests.invasive.includes('Biopsie')) $('#recBiopsy').prop('checked', true);
+        if (tests.invasive.includes('EBUS')) $('#recEBUS').prop('checked', true);
+        if (tests.molecular.includes('EGFR')) $('#recEGFR').prop('checked', true);
+        if (tests.molecular.includes('ALK')) $('#recALK').prop('checked', true);
+        if (tests.molecular.includes('ROS1')) $('#recROS1').prop('checked', true);
+        if (tests.molecular.includes('PD-L1')) $('#recPDL1').prop('checked', true);
+        
+        $('#selectAdditional').click();
+        $('#additionalTestsSection').prepend(`
+            <div class="alert alert-info alert-dismissible fade show">
+                <i class="fas fa-file-alt"></i> 
+                Prescription existante du ${new Date(currentConsultation.additionalTests.recordedAt).toLocaleString()}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
+    }
+}
+
+checkExistingPrescription();
+</script>
+{% endblock %}

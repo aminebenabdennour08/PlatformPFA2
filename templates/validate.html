@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .report-container {
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        padding: 30px;
+        margin-bottom: 20px;
+    }
+    .report-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    .report-section {
+        margin-bottom: 25px;
+    }
+    .report-section h4 {
+        color: #1e40af;
+        border-left: 4px solid #3b82f6;
+        padding-left: 12px;
+        margin-bottom: 15px;
+    }
+    .info-row {
+        display: flex;
+        margin-bottom: 10px;
+    }
+    .info-label {
+        width: 180px;
+        font-weight: 600;
+        color: #4b5563;
+    }
+    .info-value {
+        flex: 1;
+        color: #1f2937;
+    }
+    .badge-final {
+        background-color: #10b981;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 1rem;
+    }
+    .print-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    @media print {
+        .no-print, .navbar, footer, .print-btn {
+            display: none !important;
+        }
+        .report-container {
+            box-shadow: none;
+            padding: 0;
+        }
+    }
+</style>
+
+<div class="report-container">
+    <div class="report-header">
+        <h1><i class="fas fa-file-medical"></i> Rapport médical</h1>
+        <p class="text-muted">PneumoAnalyst - Plateforme d'analyse pulmonaire</p>
+        <div class="mt-2">
+            <span class="badge-final"><i class="fas fa-check-circle"></i> Diagnostic final</span>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-user"></i> Informations Patient</h4>
+        <div class="info-row">
+            <div class="info-label">ID Patient :</div>
+            <div class="info-value" id="reportPatientId">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Nom complet :</div>
+            <div class="info-value" id="reportPatientName">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Âge :</div>
+            <div class="info-value" id="reportPatientAge">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Sexe :</div>
+            <div class="info-value" id="reportPatientGender">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Date de consultation :</div>
+            <div class="info-value" id="reportDate">-</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-smoking"></i> Facteurs de risque</h4>
+        <div class="info-row">
+            <div class="info-label">Statut tabagique :</div>
+            <div class="info-value" id="reportSmoking">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Paquets-années :</div>
+            <div class="info-value" id="reportPackYears">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Tabagisme passif :</div>
+            <div class="info-value" id="reportPassiveSmoking">-</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-head-side-cough"></i> Symptômes</h4>
+        <div id="reportSymptoms" class="info-value">
+            <p class="text-muted">Aucun symptôme rapporté</p>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-microscope"></i> Résultat ViT-16</h4>
+        <div class="info-row">
+            <div class="info-label">Prédiction IA :</div>
+            <div class="info-value" id="reportVitPrediction">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Confiance :</div>
+            <div class="info-value" id="reportVitConfidence">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Date analyse :</div>
+            <div class="info-value" id="reportVitDate">-</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-chart-line"></i> Staging TNM</h4>
+        <div class="info-row">
+            <div class="info-label">Taille tumeur :</div>
+            <div class="info-value" id="reportTumorSize">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Classification T :</div>
+            <div class="info-value" id="reportTClass">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Classification N :</div>
+            <div class="info-value" id="reportNClass">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Classification M :</div>
+            <div class="info-value" id="reportMClass">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Localisation :</div>
+            <div class="info-value" id="reportLocation">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Stade :</div>
+            <div class="info-value" id="reportStage">-</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-flask"></i> Examens complémentaires</h4>
+        <div id="reportAdditionalTests" class="info-value">
+            <p class="text-muted">Aucun examen complémentaire</p>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-stethoscope"></i> Diagnostic final</h4>
+        <div class="info-row">
+            <div class="info-label">Diagnostic :</div>
+            <div class="info-value" id="reportFinalDiagnosis">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Stade final :</div>
+            <div class="info-value" id="reportFinalStage">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Validé le :</div>
+            <div class="info-value" id="reportValidationDate">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Notes médicales :</div>
+            <div class="info-value" id="reportNotes">-</div>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h4><i class="fas fa-file-alt"></i> Conclusion médicale</h4>
+        <div class="info-value p-3 bg-light rounded" id="reportConclusion">
+            -
+        </div>
+    </div>
+</div>
+
+<div class="print-btn no-print">
+    <button onclick="window.print()" class="btn btn-primary">
+        <i class="fas fa-print"></i> Imprimer / PDF
+    </button>
+    <button onclick="window.location.href='/dashboard'" class="btn btn-secondary">
+        <i class="fas fa-home"></i> Retour
+    </button>
+</div>
+
+<script>
+// Mapping des classes
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'normal': 'Normal'
+};
+
+const symptomNames = {
+    'hemoptysis': 'Hémoptysie',
+    'weightLoss': 'Perte de poids >10%',
+    'dysphagia': 'Dysphagie',
+    'hoarseness': 'Enrouement',
+    'svcSyndrome': 'Syndrome de veine cave',
+    'persistentCough': 'Toux persistante',
+    'dyspnea': 'Dyspnée',
+    'chestPain': 'Douleur thoracique',
+    'wheezing': 'Sibilants',
+    'fingerClubbing': 'Hippocratisme digital'
+};
+
+// Récupérer l'ID de la consultation
+const consultationId = new URLSearchParams(window.location.search).get('consultation_id');
+let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+let consultation = consultations.find(c => c.id == consultationId);
+
+if (!consultation) {
+    consultation = JSON.parse(localStorage.getItem('currentConsultation') || '{}');
+}
+
+if (!consultation.id) {
+    alert('⚠️ Consultation non trouvée');
+    window.location.href = '/dashboard';
+}
+
+// Afficher les informations patient
+function displayReport() {
+    // Informations patient
+    $('#reportPatientId').text(consultation.patientId || `PAT-${consultation.id.toString().slice(-4)}`);
+    $('#reportPatientName').text(consultation.patient.name);
+    $('#reportPatientAge').text(consultation.patient.age + ' ans');
+    $('#reportPatientGender').text(consultation.patient.gender === 'M' ? 'Homme' : 'Femme');
+    $('#reportDate').text(new Date(consultation.createdAt).toLocaleString());
+    
+    // Facteurs de risque
+    const smokingStatus = {
+        'never': 'Non-fumeur',
+        'former': 'Ancien fumeur',
+        'current': 'Fumeur actif'
+    };
+    $('#reportSmoking').text(smokingStatus[consultation.smoking?.status] || 'Non renseigné');
+    $('#reportPackYears').text(consultation.smoking?.packYears ? consultation.smoking.packYears + ' paquets-années' : '-');
+    $('#reportPassiveSmoking').text(consultation.smoking?.passiveSmoking ? 'Oui' : 'Non');
+    
+    // Symptômes
+    if (consultation.symptoms && Object.keys(consultation.symptoms).length > 0) {
+        let symptomsHtml = '<ul class="mb-0">';
+        for (const [sym, data] of Object.entries(consultation.symptoms)) {
+            symptomsHtml += `<li><strong>${symptomNames[sym] || sym}</strong> - Sévérité: ${data.severity || 5}/10</li>`;
+        }
+        symptomsHtml += '</ul>';
+        $('#reportSymptoms').html(symptomsHtml);
+    } else {
+        $('#reportSymptoms').html('<p class="text-muted mb-0">Aucun symptôme rapporté</p>');
+    }
+    
+    // Résultat ViT-16
+    if (consultation.vitResults) {
+        $('#reportVitPrediction').html(`<span class="badge bg-primary">${classNames[consultation.vitResults.predictedClass] || consultation.vitResults.predictedClass}</span>`);
+        $('#reportVitConfidence').text(`${(consultation.vitResults.confidence * 100).toFixed(1)}%`);
+        $('#reportVitDate').text(new Date(consultation.vitResults.date).toLocaleString());
+    } else {
+        $('#reportVitPrediction').text('-');
+        $('#reportVitConfidence').text('-');
+        $('#reportVitDate').text('-');
+    }
+    
+    // Staging TNM
+    if (consultation.staging && consultation.staging.decision === 'confirmed') {
+        $('#reportTumorSize').text(consultation.staging.tumor?.size ? consultation.staging.tumor.size + ' cm' : '-');
+        $('#reportTClass').text(consultation.staging.tumor?.tClass || '-');
+        $('#reportNClass').text(consultation.staging.tumor?.nClass || '-');
+        $('#reportMClass').text(consultation.staging.tumor?.mClass || '-');
+        
+        const locationMap = {
+            'lobe_superieur_droit': 'Lobe supérieur droit',
+            'lobe_moyen_droit': 'Lobe moyen droit',
+            'lobe_inferieur_droit': 'Lobe inférieur droit',
+            'lobe_superieur_gauche': 'Lobe supérieur gauche',
+            'lobe_inferieur_gauche': 'Lobe inférieur gauche',
+            'hilum': 'Hile pulmonaire',
+            'mediastin': 'Médiastin',
+            'pleurale': 'Pleural'
+        };
+        $('#reportLocation').text(locationMap[consultation.staging.tumor?.location] || consultation.staging.tumor?.location || '-');
+        $('#reportStage').text(consultation.staging.stage || '-');
+    } else {
+        $('#reportTumorSize').text('-');
+        $('#reportTClass').text('-');
+        $('#reportNClass').text('-');
+        $('#reportMClass').text('-');
+        $('#reportLocation').text('-');
+        $('#reportStage').text('-');
+    }
+    
+    // Examens complémentaires
+    if (consultation.additionalTests && consultation.additionalTests.requestedTests) {
+        const tests = consultation.additionalTests.requestedTests;
+        let testsHtml = '';
+        
+        if (tests.imaging && tests.imaging.length > 0) {
+            testsHtml += `<strong>Imagerie:</strong> ${tests.imaging.join(', ')}<br>`;
+        }
+        if (tests.invasive && tests.invasive.length > 0) {
+            testsHtml += `<strong>Examens invasifs:</strong> ${tests.invasive.join(', ')}<br>`;
+        }
+        if (tests.molecular && tests.molecular.length > 0) {
+            testsHtml += `<strong>Tests moléculaires:</strong> ${tests.molecular.join(', ')}<br>`;
+        }
+        if (testsHtml) {
+            $('#reportAdditionalTests').html(testsHtml);
+        } else {
+            $('#reportAdditionalTests').html('<p class="text-muted mb-0">Aucun examen complémentaire prescrit</p>');
+        }
+    } else {
+        $('#reportAdditionalTests').html('<p class="text-muted mb-0">Aucun examen complémentaire prescrit</p>');
+    }
+    
+    // Diagnostic final
+    if (consultation.finalDiagnosis) {
+        const finalClass = classNames[consultation.finalDiagnosis.predictedClass] || consultation.finalDiagnosis.predictedClass;
+        $('#reportFinalDiagnosis').html(`<span class="badge bg-success">${finalClass}</span>`);
+        $('#reportFinalStage').text(consultation.finalDiagnosis.stage || '-');
+        $('#reportValidationDate').text(new Date(consultation.finalDiagnosis.validatedAt).toLocaleString());
+        $('#reportNotes').text(consultation.finalDiagnosis.doctorNotes || 'Aucune note');
+        $('#reportConclusion').html(consultation.finalDiagnosis.conclusionNotes || 'Aucune conclusion');
+    } else if (consultation.vitResults) {
+        // Si pas de diagnostic final, afficher la prédiction
+        const finalClass = classNames[consultation.vitResults.predictedClass] || consultation.vitResults.predictedClass;
+        $('#reportFinalDiagnosis').html(`<span class="badge bg-warning">${finalClass} (prédiction)</span>`);
+        $('#reportFinalStage').text('-');
+        $('#reportValidationDate').text('-');
+        $('#reportNotes').text('En attente de validation médicale');
+        $('#reportConclusion').html('Diagnostic non encore validé par le médecin');
+    } else {
+        $('#reportFinalDiagnosis').text('-');
+        $('#reportFinalStage').text('-');
+        $('#reportValidationDate').text('-');
+        $('#reportNotes').text('-');
+        $('#reportConclusion').html('-');
+    }
+}
+
+// Initialisation
+$(document).ready(function() {
+    displayReport();
+});
+</script>
+{% endblock %}

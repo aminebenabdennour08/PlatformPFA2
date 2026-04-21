@@ -1,0 +1,579 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .step-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        padding: 0 20px;
+    }
+    .step {
+        text-align: center;
+        flex: 1;
+    }
+    .step .circle {
+        width: 40px;
+        height: 40px;
+        background-color: #e5e7eb;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-weight: bold;
+        color: #6b7280;
+    }
+    .step.completed .circle {
+        background-color: #10b981;
+        color: white;
+    }
+    .step.active .circle {
+        background-color: #3b82f6;
+        color: white;
+    }
+    .step .label {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    .step.active .label {
+        color: #3b82f6;
+        font-weight: bold;
+    }
+    .test-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .test-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .upload-area {
+        border: 2px dashed #cbd5e1;
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .upload-area:hover {
+        border-color: #3b82f6;
+        background-color: #f0f9ff;
+    }
+    .result-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+    .result-positive {
+        background-color: #fee2e2;
+        color: #dc2626;
+    }
+    .result-negative {
+        background-color: #dcfce7;
+        color: #10b981;
+    }
+    .result-pending {
+        background-color: #fef3c7;
+        color: #d97706;
+    }
+</style>
+
+<div class="step-indicator">
+    <div class="step completed">
+        <div class="circle">1</div>
+        <div class="label">Consultation</div>
+    </div>
+    <div class="step completed">
+        <div class="circle">2</div>
+        <div class="label">CT Scan</div>
+    </div>
+    <div class="step completed">
+        <div class="circle">3</div>
+        <div class="label">Analyse IA</div>
+    </div>
+    <div class="step completed">
+        <div class="circle">4</div>
+        <div class="label">Décision</div>
+    </div>
+    <div class="step active">
+        <div class="circle">5</div>
+        <div class="label">Examens compl.</div>
+    </div>
+</div>
+
+<h2 class="mb-4">
+    <i class="fas fa-flask"></i> 
+    Examens complémentaires
+</h2>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    <strong>Patient:</strong> <span id="patientName"></span> | 
+    <strong>ID:</strong> <span id="patientId"></span> |
+    <strong>Prédiction ViT-16:</strong> <span id="vitPrediction"></span>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Liste des examens demandés -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-list-check"></i> Examens prescrits
+            </div>
+            <div class="card-body" id="requestedTestsList">
+                <p class="text-muted text-center">Chargement...</p>
+            </div>
+        </div>
+
+        <!-- Upload d'examen -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-upload"></i> Téléverser un résultat d'examen
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <select id="testTypeSelect" class="form-select mb-3">
+                            <option value="">Sélectionner le type d'examen</option>
+                            <option value="PET/CT">PET/CT</option>
+                            <option value="IRM cérébrale">IRM cérébrale</option>
+                            <option value="Biopsie">Biopsie / Anatomopathologie</option>
+                            <option value="EBUS">EBUS</option>
+                            <option value="Bronchoscopie">Bronchoscopie</option>
+                            <option value="Scanner thoracique">Scanner thoracique</option>
+                            <option value="EGFR">EGFR - Test génétique</option>
+                            <option value="ALK">ALK - Test génétique</option>
+                            <option value="ROS1">ROS1 - Test génétique</option>
+                            <option value="PD-L1">PD-L1 - Immunohistochimie</option>
+                            <option value="Autre">Autre examen</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" id="otherTestName" class="form-control mb-3" placeholder="Précisez l'examen" style="display:none;">
+                    </div>
+                </div>
+                
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                    <p>Glissez-déposez le fichier ici ou cliquez pour sélectionner</p>
+                    <input type="file" id="testFile" style="display:none" accept="image/*,application/pdf">
+                    <button type="button" class="btn btn-outline-primary" onclick="$('#testFile').click()">
+                        <i class="fas fa-folder-open"></i> Parcourir
+                    </button>
+                </div>
+                
+                <div class="mt-3" id="fileInfo" style="display:none;">
+                    <div class="alert alert-info">
+                        <strong>Fichier sélectionné:</strong> <span id="fileName"></span>
+                        <button type="button" class="btn btn-sm btn-danger float-end" onclick="clearFile()">Annuler</button>
+                    </div>
+                </div>
+                
+                <div class="mb-3 mt-3">
+                    <label class="form-label fw-bold">Résultat / Interprétation</label>
+                    <textarea id="testResult" rows="3" class="form-control" 
+                        placeholder="Description du résultat, conclusions..."></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Statut du résultat</label>
+                    <select id="testStatus" class="form-select">
+                        <option value="positive">🔴 Positif / Anormal</option>
+                        <option value="negative">🟢 Négatif / Normal</option>
+                        <option value="inconclusive">🟡 Non concluant</option>
+                        <option value="pending">⏳ En attente</option>
+                    </select>
+                </div>
+                
+                <button id="uploadTestBtn" class="btn btn-primary w-100">
+                    <i class="fas fa-save"></i> Enregistrer le résultat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Résumé des résultats -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-chart-simple"></i> Synthèse des résultats
+            </div>
+            <div class="card-body" id="resultsSummary">
+                <p class="text-muted text-center">Aucun résultat enregistré</p>
+            </div>
+        </div>
+
+        <!-- Décision finale -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-stethoscope"></i> Conclusion diagnostique
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Diagnostic final</label>
+                    <select id="finalDiagnosis" class="form-select">
+                        <option value="">Sélectionner...</option>
+                        <option value="adenocarcinoma">Adénocarcinome</option>
+                        <option value="squamous.cell.carcinoma">Carcinome épidermoïde</option>
+                        <option value="large.cell.carcinoma">Carcinome à grandes cellules</option>
+                        <option value="normal">Normal</option>
+                        <option value="other">Autre / Indéterminé</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Stade final</label>
+                    <select id="finalStage" class="form-select">
+                        <option value="">Sélectionner...</option>
+                        <option value="Stade IA">Stade IA</option>
+                        <option value="Stade IB">Stade IB</option>
+                        <option value="Stade IIA">Stade IIA</option>
+                        <option value="Stade IIB">Stade IIB</option>
+                        <option value="Stade IIIA">Stade IIIA</option>
+                        <option value="Stade IIIB">Stade IIIB</option>
+                        <option value="Stade IIIC">Stade IIIC</option>
+                        <option value="Stade IVA">Stade IVA</option>
+                        <option value="Stade IVB">Stade IVB</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Conclusion médicale</label>
+                    <textarea id="conclusionNotes" rows="3" class="form-control" 
+                        placeholder="Synthèse finale, plan de traitement..."></textarea>
+                </div>
+                
+                <button id="finalizeDiagnosisBtn" class="btn btn-success btn-lg w-100">
+                    <i class="fas fa-check-circle"></i> Finaliser le diagnostic
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour visualiser le résultat -->
+<div class="modal fade" id="resultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Détail du résultat</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="resultModalBody"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Récupérer la consultation
+const consultationId = new URLSearchParams(window.location.search).get('consultation_id');
+let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+let currentConsultation = consultations.find(c => c.id == consultationId);
+
+if (!currentConsultation) {
+    currentConsultation = JSON.parse(localStorage.getItem('currentConsultation') || '{}');
+}
+
+if (!currentConsultation.id) {
+    alert('⚠️ Aucune consultation trouvée');
+    window.location.href = '/first-consultation';
+}
+
+// Afficher les infos patient
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'normal': 'Normal'
+};
+
+$('#patientName').text(currentConsultation.patient.name);
+$('#patientId').text(currentConsultation.patientId || 'N/A');
+$('#vitPrediction').html(`<strong>${classNames[currentConsultation.vitResults?.predictedClass] || 'Non disponible'}</strong>`);
+
+// Initialiser la liste des examens
+if (!currentConsultation.additionalTestsResults) {
+    currentConsultation.additionalTestsResults = [];
+}
+
+// Afficher les examens demandés
+function displayRequestedTests() {
+    const container = $('#requestedTestsList');
+    container.empty();
+    
+    if (currentConsultation.additionalTests && currentConsultation.additionalTests.requestedTests) {
+        const tests = currentConsultation.additionalTests.requestedTests;
+        let html = '';
+        
+        if (tests.imaging && tests.imaging.length > 0) {
+            html += `<h6 class="mt-2">📷 Imagerie</h6>`;
+            tests.imaging.forEach(test => {
+                const result = currentConsultation.additionalTestsResults.find(r => r.testName === test);
+                const status = result ? result.status : 'pending';
+                html += getTestCard(test, status);
+            });
+        }
+        
+        if (tests.invasive && tests.invasive.length > 0) {
+            html += `<h6 class="mt-3">🔬 Examens invasifs</h6>`;
+            tests.invasive.forEach(test => {
+                const result = currentConsultation.additionalTestsResults.find(r => r.testName === test);
+                const status = result ? result.status : 'pending';
+                html += getTestCard(test, status);
+            });
+        }
+        
+        if (tests.molecular && tests.molecular.length > 0) {
+            html += `<h6 class="mt-3">🧬 Tests moléculaires</h6>`;
+            tests.molecular.forEach(test => {
+                const result = currentConsultation.additionalTestsResults.find(r => r.testName === test);
+                const status = result ? result.status : 'pending';
+                html += getTestCard(test, status);
+            });
+        }
+        
+        if (html === '') {
+            html = '<p class="text-muted text-center">Aucun examen prescrit</p>';
+        }
+        
+        container.html(html);
+    } else {
+        container.html('<p class="text-muted text-center">Aucun examen prescrit. <a href="/tumor-staging">Retour à la décision</a></p>');
+    }
+}
+
+function getTestCard(testName, status) {
+    let statusText = '';
+    let statusClass = '';
+    
+    switch(status) {
+        case 'positive':
+            statusText = 'Positif / Anormal';
+            statusClass = 'result-positive';
+            break;
+        case 'negative':
+            statusText = 'Négatif / Normal';
+            statusClass = 'result-negative';
+            break;
+        case 'inconclusive':
+            statusText = 'Non concluant';
+            statusClass = 'result-pending';
+            break;
+        default:
+            statusText = 'En attente';
+            statusClass = 'result-pending';
+    }
+    
+    return `
+        <div class="card test-card mb-2">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${testName}</strong>
+                    </div>
+                    <div>
+                        <span class="result-badge ${statusClass}">${statusText}</span>
+                        <button class="btn btn-sm btn-outline-info ms-2" onclick="viewResult('${testName}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displayResultsSummary() {
+    const container = $('#resultsSummary');
+    container.empty();
+    
+    if (currentConsultation.additionalTestsResults.length === 0) {
+        container.html('<p class="text-muted text-center">Aucun résultat enregistré</p>');
+        return;
+    }
+    
+    let positive = 0;
+    let negative = 0;
+    let pending = 0;
+    
+    currentConsultation.additionalTestsResults.forEach(r => {
+        if (r.status === 'positive') positive++;
+        else if (r.status === 'negative') negative++;
+        else pending++;
+    });
+    
+    container.html(`
+        <div class="text-center mb-3">
+            <div class="row">
+                <div class="col-4">
+                    <div class="badge bg-danger fs-6">${positive}</div>
+                    <small class="d-block">Positifs</small>
+                </div>
+                <div class="col-4">
+                    <div class="badge bg-success fs-6">${negative}</div>
+                    <small class="d-block">Négatifs</small>
+                </div>
+                <div class="col-4">
+                    <div class="badge bg-warning fs-6">${pending}</div>
+                    <small class="d-block">En attente</small>
+                </div>
+            </div>
+        </div>
+        <hr>
+        <div class="small">
+            ${currentConsultation.additionalTestsResults.map(r => `
+                <div><strong>${r.testName}:</strong> ${r.interpretation.substring(0, 50)}...</div>
+            `).join('')}
+        </div>
+    `);
+}
+
+function viewResult(testName) {
+    const result = currentConsultation.additionalTestsResults.find(r => r.testName === testName);
+    if (result) {
+        let html = `
+            <h5>${result.testName}</h5>
+            <p><strong>Date:</strong> ${new Date(result.date).toLocaleString()}</p>
+            <p><strong>Statut:</strong> ${result.status}</p>
+            <p><strong>Interprétation:</strong><br>${result.interpretation}</p>
+        `;
+        if (result.fileData) {
+            html += `<hr><div class="text-center">
+                        <img src="${result.fileData}" style="max-width:100%; border-radius:8px;">
+                    </div>`;
+        }
+        $('#resultModalBody').html(html);
+        new bootstrap.Modal($('#resultModal')).show();
+    }
+}
+
+// Gestion du type d'examen
+$('#testTypeSelect').change(function() {
+    if ($(this).val() === 'Autre') {
+        $('#otherTestName').show();
+    } else {
+        $('#otherTestName').hide();
+    }
+});
+
+let selectedFile = null;
+let selectedFileData = null;
+
+$('#uploadArea').click(function(e) {
+    if (e.target !== $('#uploadArea')[0] && !$(e.target).closest('button').length) {
+        $('#testFile').click();
+    }
+});
+
+$('#testFile').change(function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        selectedFile = file;
+        $('#fileName').text(file.name);
+        $('#fileInfo').show();
+        
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            selectedFileData = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+function clearFile() {
+    selectedFile = null;
+    selectedFileData = null;
+    $('#testFile').val('');
+    $('#fileInfo').hide();
+}
+
+$('#uploadTestBtn').click(function() {
+    let testName = $('#testTypeSelect').val();
+    if (testName === 'Autre') {
+        testName = $('#otherTestName').val();
+        if (!testName) {
+            alert('Veuillez préciser le nom de l\'examen');
+            return;
+        }
+    }
+    if (!testName) {
+        alert('Veuillez sélectionner le type d\'examen');
+        return;
+    }
+    
+    const interpretation = $('#testResult').val();
+    const status = $('#testStatus').val();
+    
+    if (!interpretation) {
+        alert('Veuillez entrer une interprétation du résultat');
+        return;
+    }
+    
+    const resultData = {
+        testName: testName,
+        status: status,
+        interpretation: interpretation,
+        fileData: selectedFileData,
+        fileName: selectedFile ? selectedFile.name : null,
+        date: new Date().toISOString()
+    };
+    
+    const existingIndex = currentConsultation.additionalTestsResults.findIndex(r => r.testName === testName);
+    if (existingIndex !== -1) {
+        currentConsultation.additionalTestsResults[existingIndex] = resultData;
+    } else {
+        currentConsultation.additionalTestsResults.push(resultData);
+    }
+    
+    const idx = consultations.findIndex(c => c.id === currentConsultation.id);
+    if (idx !== -1) consultations[idx] = currentConsultation;
+    localStorage.setItem('consultations', JSON.stringify(consultations));
+    localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+    
+    $('#testTypeSelect').val('');
+    $('#otherTestName').val('').hide();
+    $('#testResult').val('');
+    $('#testStatus').val('positive');
+    clearFile();
+    
+    displayRequestedTests();
+    displayResultsSummary();
+    
+    alert(`✅ Résultat pour ${testName} enregistré !`);
+});
+
+// Finaliser le diagnostic
+$('#finalizeDiagnosisBtn').click(function() {
+    const finalDiagnosis = $('#finalDiagnosis').val();
+    const finalStage = $('#finalStage').val();
+    const conclusionNotes = $('#conclusionNotes').val();
+    
+    if (!finalDiagnosis) {
+        alert('Veuillez sélectionner le diagnostic final');
+        return;
+    }
+    
+    currentConsultation.finalDiagnosis = {
+        predictedClass: finalDiagnosis,
+        originalPrediction: currentConsultation.vitResults?.predictedClass,
+        stage: finalStage,
+        conclusionNotes: conclusionNotes,
+        validatedAt: new Date().toISOString(),
+        basedOnAdditionalTests: true
+    };
+    currentConsultation.status = 'valide';
+    
+    const idx = consultations.findIndex(c => c.id === currentConsultation.id);
+    if (idx !== -1) consultations[idx] = currentConsultation;
+    localStorage.setItem('consultations', JSON.stringify(consultations));
+    localStorage.removeItem('currentConsultation');
+    
+    alert('✅ Diagnostic final enregistré !');
+    window.location.href = '/dashboard';
+});
+
+// Initialisation
+displayRequestedTests();
+displayResultsSummary();
+</script>
+{% endblock %}

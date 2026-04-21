@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .step-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        padding: 0 20px;
+    }
+    .step {
+        text-align: center;
+        flex: 1;
+    }
+    .step .circle {
+        width: 40px;
+        height: 40px;
+        background-color: #e5e7eb;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-weight: bold;
+        color: #6b7280;
+    }
+    .step.completed .circle {
+        background-color: #10b981;
+        color: white;
+    }
+    .step.active .circle {
+        background-color: #3b82f6;
+        color: white;
+    }
+    .step .label {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    .step.active .label {
+        color: #3b82f6;
+        font-weight: bold;
+    }
+    .probability-bar {
+        transition: width 0.5s ease;
+    }
+    .high-confidence {
+        border-left: 4px solid #10b981;
+    }
+    .medium-confidence {
+        border-left: 4px solid #f59e0b;
+    }
+    .low-confidence {
+        border-left: 4px solid #ef4444;
+    }
+</style>
+
+<div class="step-indicator">
+    <div class="step completed">
+        <div class="circle">1</div>
+        <div class="label">Consultation</div>
+    </div>
+    <div class="step completed">
+        <div class="circle">2</div>
+        <div class="label">CT Scan</div>
+    </div>
+    <div class="step active">
+        <div class="circle">3</div>
+        <div class="label">Analyse IA</div>
+    </div>
+    <div class="step">
+        <div class="circle">4</div>
+        <div class="label">Décision</div>
+    </div>
+    <div class="step">
+        <div class="circle">5</div>
+        <div class="label">Finalisation</div>
+    </div>
+</div>
+
+<h2 class="mb-4">
+    <i class="fas fa-microscope"></i> Résultat de l'analyse ViT-16
+</h2>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    <strong>Patient:</strong> <span id="patientName"></span> | 
+    <strong>ID:</strong> <span id="patientId"></span> |
+    <strong>Âge:</strong> <span id="patientAge"></span> ans
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-image"></i> Image CT analysée
+            </div>
+            <div class="card-body text-center">
+                <img id="analysisImage" src="#" style="max-width:100%; border-radius: 8px;">
+                <div id="imageError" class="alert alert-warning mt-2" style="display:none">
+                    <i class="fas fa-exclamation-triangle"></i> Aucune image CT disponible.
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-brain"></i> Prédiction ViT-16
+            </div>
+            <div class="card-body">
+                <div id="loading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Chargement...</span>
+                    </div>
+                    <p class="mt-2">Analyse de l'image par ViT-16 en cours...</p>
+                    <p class="text-muted small">L'IA analyse les caractéristiques du CT scan</p>
+                    <div class="progress mt-3" style="height: 5px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <div id="errorMessage" style="display:none" class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="errorText"></span>
+                </div>
+                <div id="result" style="display:none">
+                    <div class="text-center mb-4 result-card" id="resultCard">
+                        <h3>Classe prédite :</h3>
+                        <div class="display-6 fw-bold" id="predClass"></div>
+                        <p class="mt-2">Confiance : <strong id="confidence"></strong>%</p>
+                        <div class="progress mt-2" style="height: 8px;">
+                            <div id="confidenceFill" class="progress-bar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <h5>Probabilités détaillées par classe :</h5>
+                    <div id="probaBars" class="mt-3"></div>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Interprétation :</strong>
+                        <p id="interpretation" class="mt-2 mb-0"></p>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        Ce résultat est une aide au diagnostic. La décision finale revient au médecin.
+                    </div>
+                    
+                    <button id="continueToDecision" class="btn btn-primary btn-lg w-100 mt-3">
+                        <i class="fas fa-arrow-right"></i> Continuer vers la décision médicale
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Mapping des classes
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'normal': 'Normal'
+};
+
+const classColors = {
+    'adenocarcinoma': '#8b5cf6',
+    'large.cell.carcinoma': '#ef4444',
+    'squamous.cell.carcinoma': '#f59e0b',
+    'normal': '#10b981'
+};
+
+const classInterpretations = {
+    'adenocarcinoma': 'Cancer du poumon non à petites cellules (NSCLC) le plus fréquent. Souvent périphérique, peut être associé à des mutations EGFR, ALK, KRAS.',
+    'large.cell.carcinoma': 'NSCLC indifférencié, souvent de grande taille au moment du diagnostic. Pronostic variable, souvent diagnostiqué à un stade avancé.',
+    'squamous.cell.carcinoma': 'NSCLC souvent central, fortement associé au tabagisme. Peut former des cavitations nécrotiques.',
+    'normal': 'Aucune anomalie détectée. Architecture pulmonaire normale, pas de masse suspecte.'
+};
+
+// Récupérer l'ID de la consultation depuis l'URL
+let consultationId = new URLSearchParams(window.location.search).get('consultation_id');
+
+// Récupérer la consultation depuis localStorage
+let currentConsultation = JSON.parse(localStorage.getItem('currentConsultation') || '{}');
+
+// Priorité à l'ID MySQL s'il existe
+if (!consultationId && currentConsultation.mysql_id) {
+    consultationId = currentConsultation.mysql_id;
+} else if (!consultationId && currentConsultation.id) {
+    consultationId = currentConsultation.id;
+}
+
+console.log('🔍 Consultation ID utilisé:', consultationId);
+
+if (!consultationId) {
+    alert('⚠️ Aucune consultation sélectionnée');
+    window.location.href = '/dashboard';
+}
+
+let progressInterval = null;
+
+function startProgressAnimation() {
+    let progress = 0;
+    progressInterval = setInterval(() => {
+        if (progress < 90) {
+            progress += Math.random() * 10;
+            if (progress > 90) progress = 90;
+            $('#progressBar').css('width', progress + '%');
+        }
+    }, 500);
+}
+
+function stopProgressAnimation() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        $('#progressBar').css('width', '100%');
+        setTimeout(() => {
+            $('#progressBar').css('width', '0%');
+        }, 500);
+    }
+}
+
+// Afficher les infos patient
+function displayPatientInfo() {
+    if (currentConsultation && currentConsultation.patient) {
+        $('#patientName').text(currentConsultation.patient.name || 'Non spécifié');
+        $('#patientId').text(currentConsultation.patientId || 'N/A');
+        $('#patientAge').text(currentConsultation.patient.age || '-');
+        
+        // Afficher l'image si disponible dans localStorage
+        if (currentConsultation.imagePath) {
+            $('#analysisImage').attr('src', currentConsultation.imagePath);
+        } else {
+            // Essayer de charger depuis l'API
+            fetch(`/api/consultation/${consultationId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.image_path) {
+                        const imageUrl = `/static/uploads/${data.image_path}`;
+                        $('#analysisImage').attr('src', imageUrl);
+                        $('#imageError').hide();
+                    } else {
+                        $('#imageError').show();
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur chargement image:', error);
+                    $('#imageError').show();
+                });
+        }
+    }
+}
+
+// Synchroniser la consultation avec MySQL
+async function syncConsultationToDatabase() {
+    if (!currentConsultation || !currentConsultation.patient) {
+        console.error('Aucune consultation dans localStorage');
+        return false;
+    }
+    
+    const consultationData = {
+        consultation_id: currentConsultation.id.toString(),
+        patient_id: currentConsultation.patientId || `PAT-${currentConsultation.id}`,
+        patient_name: currentConsultation.patient.name,
+        patient_age: currentConsultation.patient.age,
+        patient_gender: currentConsultation.patient.gender,
+        smoking_status: currentConsultation.smoking?.status || 'never',
+        smoking_years: currentConsultation.smoking?.years || 0,
+        packs_per_day: currentConsultation.smoking?.packsPerDay || 0,
+        pack_years: currentConsultation.smoking?.packYears || 0,
+        passive_smoking: currentConsultation.smoking?.passiveSmoking || false,
+        clinical_suspicion: currentConsultation.clinicalSuspicion || 'moderate',
+        urgency_level: currentConsultation.urgencyLevel || 'medium',
+        initial_suspicion: currentConsultation.initialSuspicion || '',
+        clinical_notes: currentConsultation.clinicalNotes || '',
+        symptoms: currentConsultation.symptoms || {}
+    };
+    
+    try {
+        const response = await fetch('/api/save_consultation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(consultationData)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Consultation synchronisée, MySQL ID:', result.id);
+            currentConsultation.mysql_id = result.id;
+            localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+            return result.id;
+        }
+        return false;
+    } catch (error) {
+        console.error('Erreur synchronisation:', error);
+        return false;
+    }
+}
+
+// Lancer la prédiction
+async function runPrediction() {
+    $('#loading').show();
+    $('#result').hide();
+    $('#errorMessage').hide();
+    startProgressAnimation();
+    
+    // S'assurer que la consultation existe en base
+    let dbId = consultationId;
+    
+    // Si l'ID est un timestamp (localStorage) et pas encore en base, synchroniser
+    if (consultationId.toString().length > 10 && !currentConsultation.mysql_id) {
+        const syncedId = await syncConsultationToDatabase();
+        if (syncedId) {
+            dbId = syncedId;
+            consultationId = syncedId;
+        }
+    }
+    
+    try {
+        const response = await fetch(`/api/predict/${dbId}`);
+        const data = await response.json();
+        
+        stopProgressAnimation();
+        $('#loading').hide();
+        
+        if (data.error) {
+            $('#errorMessage').show();
+            $('#errorText').text(data.error);
+            return;
+        }
+        
+        // Afficher les résultats
+        $('#result').show();
+        
+        const predictedClass = data.predicted_class;
+        const confidence = data.confidence;
+        const probabilities = data.probabilities;
+        
+        // Sauvegarder dans localStorage
+        currentConsultation.vitResults = {
+            predictedClass: predictedClass,
+            confidence: confidence,
+            probabilities: probabilities,
+            date: new Date().toISOString()
+        };
+        currentConsultation.status = 'predicted';
+        localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+        
+        // Mettre à jour la liste
+        let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+        const idx = consultations.findIndex(c => c.id == currentConsultation.id);
+        if (idx !== -1) {
+            consultations[idx] = currentConsultation;
+            localStorage.setItem('consultations', JSON.stringify(consultations));
+        }
+        
+        // Afficher la classe prédite
+        $('#predClass').html(`<span class="badge bg-primary fs-3">${classNames[predictedClass] || predictedClass}</span>`);
+        $('#confidence').text((confidence * 100).toFixed(1));
+        
+        const confidencePercent = confidence * 100;
+        $('#confidenceFill').css('width', confidencePercent + '%');
+        
+        if (confidence >= 0.7) {
+            $('#confidenceFill').removeClass('bg-warning bg-danger').addClass('bg-success');
+            $('#resultCard').removeClass('medium-confidence low-confidence').addClass('high-confidence');
+        } else if (confidence >= 0.5) {
+            $('#confidenceFill').removeClass('bg-success bg-danger').addClass('bg-warning');
+            $('#resultCard').removeClass('high-confidence low-confidence').addClass('medium-confidence');
+        } else {
+            $('#confidenceFill').removeClass('bg-success bg-warning').addClass('bg-danger');
+            $('#resultCard').removeClass('high-confidence medium-confidence').addClass('low-confidence');
+        }
+        
+        $('#interpretation').text(classInterpretations[predictedClass] || 'Résultat à interpréter avec les données cliniques.');
+        
+        // Afficher les probabilités
+        let html = '';
+        for (const [cls, prob] of Object.entries(probabilities)) {
+            const probPercent = (prob * 100).toFixed(1);
+            const className = classNames[cls] || cls;
+            const color = classColors[cls] || '#6c757d';
+            html += `
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><strong>${className}</strong></span>
+                        <span>${probPercent}%</span>
+                    </div>
+                    <div class="progress" style="height: 12px;">
+                        <div class="progress-bar probability-bar" style="width: 0%; background-color: ${color};"></div>
+                    </div>
+                </div>
+            `;
+        }
+        $('#probaBars').html(html);
+        
+        // Animation des barres
+        setTimeout(() => {
+            $('.probability-bar').each(function() {
+                const parent = $(this).closest('.mb-3');
+                const percentText = parent.find('.d-flex span:last-child').text().replace('%', '');
+                $(this).css('width', percentText + '%');
+            });
+        }, 100);
+        
+    } catch (error) {
+        stopProgressAnimation();
+        $('#loading').hide();
+        $('#errorMessage').show();
+        $('#errorText').text('Erreur de connexion: ' + error.message);
+        console.error('Prediction error:', error);
+    }
+}
+
+// Vérifier si la prédiction existe déjà
+function checkExistingPrediction() {
+    if (currentConsultation.vitResults && currentConsultation.vitResults.predictedClass) {
+        $('#loading').hide();
+        $('#result').show();
+        
+        const predictedClass = currentConsultation.vitResults.predictedClass;
+        const confidence = currentConsultation.vitResults.confidence;
+        const probabilities = currentConsultation.vitResults.probabilities;
+        
+        $('#predClass').html(`<span class="badge bg-primary fs-3">${classNames[predictedClass] || predictedClass}</span>`);
+        $('#confidence').text((confidence * 100).toFixed(1));
+        $('#confidenceFill').css('width', (confidence * 100) + '%');
+        $('#interpretation').text(classInterpretations[predictedClass] || '');
+        
+        let html = '';
+        for (const [cls, prob] of Object.entries(probabilities)) {
+            const probPercent = (prob * 100).toFixed(1);
+            const className = classNames[cls] || cls;
+            const color = classColors[cls] || '#6c757d';
+            html += `
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><strong>${className}</strong></span>
+                        <span>${probPercent}%</span>
+                    </div>
+                    <div class="progress" style="height: 12px;">
+                        <div class="progress-bar" style="width: ${probPercent}%; background-color: ${color};"></div>
+                    </div>
+                </div>
+            `;
+        }
+        $('#probaBars').html(html);
+    } else {
+        runPrediction();
+    }
+}
+
+// Bouton pour continuer vers la décision
+$('#continueToDecision').click(function() {
+    window.location.href = `/tumor-staging?consultation_id=${consultationId}`;
+});
+
+// Initialisation
+$(document).ready(function() {
+    displayPatientInfo();
+    checkExistingPrediction();
+});
+</script>
+{% endblock %}

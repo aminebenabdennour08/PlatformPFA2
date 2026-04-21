@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .report-container {
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        padding: 30px;
+        margin-bottom: 20px;
+    }
+    .report-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    .report-header h1 {
+        color: #1e40af;
+        font-size: 1.8rem;
+    }
+    .report-section {
+        margin-bottom: 25px;
+        page-break-inside: avoid;
+    }
+    .report-section h4 {
+        color: #1e40af;
+        border-left: 4px solid #3b82f6;
+        padding-left: 12px;
+        margin-bottom: 15px;
+        background-color: #f8fafc;
+        padding: 10px 15px;
+        border-radius: 8px;
+    }
+    .info-row {
+        display: flex;
+        margin-bottom: 10px;
+        padding: 5px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .info-label {
+        width: 200px;
+        font-weight: 600;
+        color: #4b5563;
+    }
+    .info-value {
+        flex: 1;
+        color: #1f2937;
+    }
+    .badge-final {
+        background-color: #10b981;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 1rem;
+        display: inline-block;
+    }
+    .print-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    .signature-section {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px dashed #cbd5e1;
+        display: flex;
+        justify-content: space-between;
+    }
+    .probability-bar {
+        height: 8px;
+        background-color: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 5px;
+    }
+    .probability-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    @media print {
+        .no-print, .navbar, footer, .print-btn {
+            display: none !important;
+        }
+        .report-container {
+            box-shadow: none;
+            padding: 0;
+        }
+        .report-section {
+            break-inside: avoid;
+        }
+    }
+</style>
+
+<div class="report-container">
+    <div class="report-header">
+        <h1><i class="fas fa-file-medical"></i> Rapport Médical</h1>
+        <p class="text-muted">PneumoAnalyst - Plateforme d'analyse pulmonaire</p>
+        <div class="mt-3">
+            <span class="badge-final"><i class="fas fa-check-circle"></i> Rapport Final</span>
+        </div>
+        <p class="text-muted mt-2">Généré le <span id="reportDate"></span></p>
+    </div>
+
+    <!-- Informations Patient -->
+    <div class="report-section">
+        <h4><i class="fas fa-user"></i> Informations Patient</h4>
+        <div class="info-row">
+            <div class="info-label">ID Patient :</div>
+            <div class="info-value" id="reportPatientId">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Nom complet :</div>
+            <div class="info-value" id="reportPatientName">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Âge :</div>
+            <div class="info-value" id="reportPatientAge">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Sexe :</div>
+            <div class="info-value" id="reportPatientGender">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Date de consultation :</div>
+            <div class="info-value" id="reportConsultationDate">-</div>
+        </div>
+    </div>
+
+    <!-- Facteurs de risque -->
+    <div class="report-section">
+        <h4><i class="fas fa-smoking"></i> Facteurs de risque</h4>
+        <div class="info-row">
+            <div class="info-label">Statut tabagique :</div>
+            <div class="info-value" id="reportSmoking">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Paquets-années :</div>
+            <div class="info-value" id="reportPackYears">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Tabagisme passif :</div>
+            <div class="info-value" id="reportPassiveSmoking">-</div>
+        </div>
+    </div>
+
+    <!-- Symptômes -->
+    <div class="report-section">
+        <h4><i class="fas fa-head-side-cough"></i> Symptômes cliniques</h4>
+        <div id="reportSymptoms" class="info-value">
+            <p class="text-muted">Aucun symptôme rapporté</p>
+        </div>
+    </div>
+
+    <!-- Résultat ViT-16 -->
+    <div class="report-section">
+        <h4><i class="fas fa-microscope"></i> Analyse ViT-16</h4>
+        <div class="info-row">
+            <div class="info-label">Prédiction IA :</div>
+            <div class="info-value" id="reportVitPrediction">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Confiance :</div>
+            <div class="info-value" id="reportVitConfidence">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Date analyse :</div>
+            <div class="info-value" id="reportVitDate">-</div>
+        </div>
+        <div id="reportProbabilities" class="mt-2"></div>
+    </div>
+
+    <!-- Staging TNM -->
+    <div class="report-section">
+        <h4><i class="fas fa-chart-line"></i> Classification TNM</h4>
+        <div class="info-row">
+            <div class="info-label">Taille de la tumeur :</div>
+            <div class="info-value" id="reportTumorSize">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Classification T :</div>
+            <div class="info-value" id="reportTClass">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Classification N :</div>
+            <div class="info-value" id="reportNClass">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Classification M :</div>
+            <div class="info-value" id="reportMClass">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Localisation :</div>
+            <div class="info-value" id="reportLocation">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Stade clinique :</div>
+            <div class="info-value" id="reportStage">-</div>
+        </div>
+    </div>
+
+    <!-- Examens complémentaires -->
+    <div class="report-section">
+        <h4><i class="fas fa-flask"></i> Examens complémentaires</h4>
+        <div id="reportAdditionalTests" class="info-value">
+            <p class="text-muted">Aucun examen complémentaire</p>
+        </div>
+        <div id="reportTestResults" class="mt-2"></div>
+    </div>
+
+    <!-- Diagnostic final -->
+    <div class="report-section">
+        <h4><i class="fas fa-stethoscope"></i> Diagnostic final</h4>
+        <div class="info-row">
+            <div class="info-label">Diagnostic :</div>
+            <div class="info-value" id="reportFinalDiagnosis">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Stade final :</div>
+            <div class="info-value" id="reportFinalStage">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Validé le :</div>
+            <div class="info-value" id="reportValidationDate">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Médecin :</div>
+            <div class="info-value" id="reportDoctor">Dr. Demo</div>
+        </div>
+    </div>
+
+    <!-- Notes et conclusion -->
+    <div class="report-section">
+        <h4><i class="fas fa-file-alt"></i> Notes et conclusion</h4>
+        <div class="info-row">
+            <div class="info-label">Notes médicales :</div>
+            <div class="info-value" id="reportNotes">-</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Conclusion :</div>
+            <div class="info-value" id="reportConclusion">-</div>
+        </div>
+    </div>
+
+    <!-- Signature -->
+    <div class="signature-section">
+        <div>
+            <p>Fait à _________________</p>
+            <p>Le <span id="signatureDate"></span></p>
+        </div>
+        <div>
+            <p>Signature du médecin</p>
+            <p><i class="fas fa-signature fa-2x text-muted"></i></p>
+        </div>
+    </div>
+</div>
+
+<div class="print-btn no-print">
+    <button onclick="window.print()" class="btn btn-primary">
+        <i class="fas fa-print"></i> Imprimer / PDF
+    </button>
+    <button onclick="window.location.href='/history'" class="btn btn-secondary">
+        <i class="fas fa-history"></i> Retour à l'historique
+    </button>
+</div>
+
+<script>
+// Mapping des classes
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'normal': 'Normal'
+};
+
+const symptomNames = {
+    'hemoptysis': 'Hémoptysie',
+    'weightLoss': 'Perte de poids >10%',
+    'dysphagia': 'Dysphagie',
+    'hoarseness': 'Enrouement',
+    'svcSyndrome': 'Syndrome de veine cave',
+    'persistentCough': 'Toux persistante',
+    'dyspnea': 'Dyspnée',
+    'chestPain': 'Douleur thoracique',
+    'wheezing': 'Sibilants',
+    'fingerClubbing': 'Hippocratisme digital'
+};
+
+const locationNames = {
+    'lobe_superieur_droit': 'Lobe supérieur droit',
+    'lobe_moyen_droit': 'Lobe moyen droit',
+    'lobe_inferieur_droit': 'Lobe inférieur droit',
+    'lobe_superieur_gauche': 'Lobe supérieur gauche',
+    'lobe_inferieur_gauche': 'Lobe inférieur gauche',
+    'hilum': 'Hile pulmonaire',
+    'mediastin': 'Médiastin',
+    'pleurale': 'Pleural'
+};
+
+// Récupérer l'ID de la consultation
+const consultationId = new URLSearchParams(window.location.search).get('consultation_id');
+let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+let consultation = consultations.find(c => c.id == consultationId);
+
+if (!consultation) {
+    consultation = JSON.parse(localStorage.getItem('currentConsultation') || '{}');
+}
+
+if (!consultation.id) {
+    alert('⚠️ Consultation non trouvée');
+    window.location.href = '/history';
+}
+
+// Afficher la date du rapport
+$('#reportDate').text(new Date().toLocaleString());
+$('#signatureDate').text(new Date().toLocaleDateString());
+
+// Informations patient
+function displayPatientInfo() {
+    $('#reportPatientId').text(consultation.patientId || `PAT-${consultation.id.toString().slice(-4)}`);
+    $('#reportPatientName').text(consultation.patient.name);
+    $('#reportPatientAge').text(consultation.patient.age + ' ans');
+    $('#reportPatientGender').text(consultation.patient.gender === 'M' ? 'Homme' : 'Femme');
+    $('#reportConsultationDate').text(new Date(consultation.createdAt).toLocaleString());
+}
+
+// Facteurs de risque
+function displayRiskFactors() {
+    const smokingStatus = {
+        'never': 'Non-fumeur',
+        'former': 'Ancien fumeur',
+        'current': 'Fumeur actif'
+    };
+    $('#reportSmoking').text(smokingStatus[consultation.smoking?.status] || 'Non renseigné');
+    $('#reportPackYears').text(consultation.smoking?.packYears ? consultation.smoking.packYears + ' paquets-années' : '-');
+    $('#reportPassiveSmoking').text(consultation.smoking?.passiveSmoking ? 'Oui' : 'Non');
+}
+
+// Symptômes
+function displaySymptoms() {
+    if (consultation.symptoms && Object.keys(consultation.symptoms).length > 0) {
+        let html = '<div class="table-responsive"><table class="table table-sm">';
+        html += '<thead><tr><th>Symptôme</th><th>Sévérité</th></tr></thead><tbody>';
+        for (const [sym, data] of Object.entries(consultation.symptoms)) {
+            html += `<tr>
+                        <td><strong>${symptomNames[sym] || sym}</strong></td>
+                        <td>${data.severity || 5}/10</td>
+                     </tr>`;
+        }
+        html += '</tbody></table></div>';
+        $('#reportSymptoms').html(html);
+    } else {
+        $('#reportSymptoms').html('<p class="text-muted">Aucun symptôme rapporté</p>');
+    }
+}
+
+// Résultat ViT-16
+function displayVitResults() {
+    if (consultation.vitResults) {
+        $('#reportVitPrediction').html(`<span class="badge bg-primary">${classNames[consultation.vitResults.predictedClass] || consultation.vitResults.predictedClass}</span>`);
+        $('#reportVitConfidence').text(`${(consultation.vitResults.confidence * 100).toFixed(1)}%`);
+        $('#reportVitDate').text(new Date(consultation.vitResults.date).toLocaleString());
+        
+        if (consultation.vitResults.probabilities) {
+            let html = '<div class="mt-2"><small>Probabilités détaillées :</small>';
+            for (const [cls, prob] of Object.entries(consultation.vitResults.probabilities)) {
+                const percent = (prob * 100).toFixed(1);
+                html += `
+                    <div class="mt-1">
+                        <div class="d-flex justify-content-between small">
+                            <span>${classNames[cls] || cls}</span>
+                            <span>${percent}%</span>
+                        </div>
+                        <div class="probability-bar">
+                            <div class="probability-fill" style="width: ${percent}%; background-color: #3b82f6;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            $('#reportProbabilities').html(html);
+        }
+    } else {
+        $('#reportVitPrediction').text('-');
+        $('#reportVitConfidence').text('-');
+        $('#reportVitDate').text('-');
+    }
+}
+
+// Staging TNM
+function displayStaging() {
+    if (consultation.staging && consultation.staging.decision === 'confirmed') {
+        $('#reportTumorSize').text(consultation.staging.tumor?.size ? consultation.staging.tumor.size + ' cm' : '-');
+        $('#reportTClass').text(consultation.staging.tumor?.tClass || '-');
+        $('#reportNClass').text(consultation.staging.tumor?.nClass || '-');
+        $('#reportMClass').text(consultation.staging.tumor?.mClass || '-');
+        
+        const location = locationNames[consultation.staging.tumor?.location] || consultation.staging.tumor?.location || '-';
+        $('#reportLocation').text(location);
+        $('#reportStage').text(consultation.staging.stage || '-');
+    } else {
+        $('#reportTumorSize').text('-');
+        $('#reportTClass').text('-');
+        $('#reportNClass').text('-');
+        $('#reportMClass').text('-');
+        $('#reportLocation').text('-');
+        $('#reportStage').text('-');
+    }
+}
+
+// Examens complémentaires
+function displayAdditionalTests() {
+    if (consultation.additionalTests && consultation.additionalTests.requestedTests) {
+        const tests = consultation.additionalTests.requestedTests;
+        let html = '';
+        
+        if (tests.imaging && tests.imaging.length > 0) {
+            html += `<div class="mb-2"><strong>📷 Imagerie :</strong> ${tests.imaging.join(', ')}</div>`;
+        }
+        if (tests.invasive && tests.invasive.length > 0) {
+            html += `<div class="mb-2"><strong>🔬 Examens invasifs :</strong> ${tests.invasive.join(', ')}</div>`;
+        }
+        if (tests.molecular && tests.molecular.length > 0) {
+            html += `<div class="mb-2"><strong>🧬 Tests moléculaires :</strong> ${tests.molecular.join(', ')}</div>`;
+        }
+        
+        $('#reportAdditionalTests').html(html || '<p class="text-muted">Aucun examen complémentaire prescrit</p>');
+    } else {
+        $('#reportAdditionalTests').html('<p class="text-muted">Aucun examen complémentaire prescrit</p>');
+    }
+    
+    if (consultation.additionalTestsResults && consultation.additionalTestsResults.length > 0) {
+        let html = '<div class="mt-3"><strong>Résultats des examens :</strong></div>';
+        consultation.additionalTestsResults.forEach(result => {
+            const statusClass = result.status === 'positive' ? 'text-danger' : (result.status === 'negative' ? 'text-success' : 'text-warning');
+            html += `
+                <div class="card mt-2 p-2">
+                    <div class="d-flex justify-content-between">
+                        <strong>${result.testName}</strong>
+                        <span class="${statusClass}">${result.status === 'positive' ? '🔴 Positif' : (result.status === 'negative' ? '🟢 Négatif' : '🟡 Non concluant')}</span>
+                    </div>
+                    <div class="small text-muted mt-1">${result.interpretation}</div>
+                    <div class="small text-muted">Date: ${new Date(result.date).toLocaleString()}</div>
+                </div>
+            `;
+        });
+        $('#reportTestResults').html(html);
+    }
+}
+
+// Diagnostic final
+function displayFinalDiagnosis() {
+    if (consultation.finalDiagnosis) {
+        const finalClass = classNames[consultation.finalDiagnosis.predictedClass] || consultation.finalDiagnosis.predictedClass;
+        $('#reportFinalDiagnosis').html(`<span class="badge bg-success">${finalClass}</span>`);
+        $('#reportFinalStage').text(consultation.finalDiagnosis.stage || '-');
+        $('#reportValidationDate').text(new Date(consultation.finalDiagnosis.validatedAt).toLocaleString());
+        $('#reportNotes').text(consultation.finalDiagnosis.doctorNotes || 'Aucune note');
+        $('#reportConclusion').html(consultation.finalDiagnosis.conclusionNotes || 'Aucune conclusion');
+    } else if (consultation.vitResults) {
+        const finalClass = classNames[consultation.vitResults.predictedClass] || consultation.vitResults.predictedClass;
+        $('#reportFinalDiagnosis').html(`<span class="badge bg-warning">${finalClass} (en attente)</span>`);
+        $('#reportFinalStage').text('-');
+        $('#reportValidationDate').text('-');
+        $('#reportNotes').text('En attente de validation médicale');
+        $('#reportConclusion').html('Diagnostic en cours d\'évaluation');
+    } else {
+        $('#reportFinalDiagnosis').text('-');
+        $('#reportFinalStage').text('-');
+        $('#reportValidationDate').text('-');
+        $('#reportNotes').text('-');
+        $('#reportConclusion').html('-');
+    }
+}
+
+// Initialisation
+$(document).ready(function() {
+    displayPatientInfo();
+    displayRiskFactors();
+    displaySymptoms();
+    displayVitResults();
+    displayStaging();
+    displayAdditionalTests();
+    displayFinalDiagnosis();
+});
+</script>
+{% endblock %}

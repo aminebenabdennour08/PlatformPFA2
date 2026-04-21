@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .step-badge {
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    .step-1 { background-color: #e0e7ff; color: #4338ca; }
+    .step-2 { background-color: #fef3c7; color: #92400e; }
+    .step-3 { background-color: #d1fae5; color: #065f46; }
+    .step-4 { background-color: #fef3c7; color: #92400e; }
+    .step-5 { background-color: #d1fae5; color: #065f46; }
+    .btn-action {
+        padding: 5px 12px;
+        font-size: 0.8rem;
+    }
+    .stat-card {
+        transition: transform 0.2s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+    }
+</style>
+
+<h2 class="mb-4"><i class="fas fa-tachometer-alt"></i> Tableau de bord</h2>
+
+<!-- Statistiques -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="card text-white bg-info stat-card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Total examens</h5>
+                <p class="card-text display-4" id="totalExamens">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning stat-card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">En cours</h5>
+                <p class="card-text display-4" id="enCours">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success stat-card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Terminés</h5>
+                <p class="card-text display-4" id="termines">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger stat-card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Alertes</h5>
+                <p class="card-text display-4" id="alertes">-</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Barre de recherche -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-search"></i> Rechercher une consultation
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <input type="text" id="searchId" class="form-control" placeholder="ID Patient">
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="text" id="searchName" class="form-control" placeholder="Nom du patient">
+            </div>
+            <div class="col-md-3 mb-2">
+                <input type="date" id="searchDate" class="form-control">
+            </div>
+            <div class="col-md-2 mb-2">
+                <button id="searchBtn" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Rechercher
+                </button>
+            </div>
+            <div class="col-md-1 mb-2">
+                <button id="clearSearchBtn" class="btn btn-secondary w-100">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mt-2" id="searchInfo"></div>
+    </div>
+</div>
+
+<!-- Résultats de la recherche -->
+<div id="searchResultsSection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-search"></i> Résultats de la recherche
+            <span id="resultCount" class="badge bg-light text-dark ms-2">0</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="searchResultsTable">
+                    <thead>
+                        <tr>
+                            <th>ID Patient</th>
+                            <th>Patient</th>
+                            <th>Date / Heure</th>
+                            <th>Étape</th>
+                            <th>Statut</th>
+                            <th>Diagnostic</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Consultations en cours -->
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-list"></i> Consultations en cours
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="activeTable">
+                <thead>
+                    <tr>
+                        <th>ID Patient</th>
+                        <th>Patient</th>
+                        <th>Date / Heure</th>
+                        <th>Étape</th>
+                        <th>Statut</th>
+                        <th>Prédiction</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Mapping des classes
+const classNames = {
+    'adenocarcinoma': 'Adénocarcinome',
+    'squamous.cell.carcinoma': 'Carcinome épidermoïde',
+    'large.cell.carcinoma': 'Carcinome à grandes cellules',
+    'normal': 'Normal'
+};
+
+let allConsultations = [];
+
+// Fonction pour obtenir le numéro de l'étape
+function getStepNumber(status) {
+    const steps = {
+        'consultation_completed': 1,
+        'ct_uploaded': 2,
+        'predicted': 3,
+        'staging_completed': 4,
+        'additional_tests_draft': 4,
+        'additional_tests_needed': 4,
+        'valide': 5,
+        'rejete': 5
+    };
+    return steps[status] || 1;
+}
+
+// Fonction pour obtenir le libellé de l'étape
+function getStepLabel(status) {
+    const step = getStepNumber(status);
+    const labels = {
+        1: '📝 Consultation initiale',
+        2: '📷 CT Scan',
+        3: '🤖 Analyse IA',
+        4: '🔬 Examens complémentaires',
+        5: '✅ Validation finale'
+    };
+    return `${step}/5 - ${labels[step]}`;
+}
+
+// Fonction pour obtenir le badge de statut
+function getStatusBadge(status) {
+    const badges = {
+        'consultation_completed': '<span class="badge bg-secondary">📝 Consultation faite</span>',
+        'ct_uploaded': '<span class="badge bg-primary">📷 CT uploadé</span>',
+        'predicted': '<span class="badge bg-info">🤖 Prédiction faite</span>',
+        'staging_completed': '<span class="badge bg-success">📊 Staging fait</span>',
+        'additional_tests_draft': '<span class="badge bg-warning text-dark">💾 Brouillon examens</span>',
+        'additional_tests_needed': '<span class="badge bg-warning text-dark">🔬 Examens prescrits</span>',
+        'valide': '<span class="badge bg-success">✅ Diagnostic validé</span>',
+        'rejete': '<span class="badge bg-danger">✏️ Diagnostic corrigé</span>'
+    };
+    return badges[status] || '<span class="badge bg-secondary">📝 En cours</span>';
+}
+
+// Fonction pour obtenir le bouton d'action
+function getActionButton(consult) {
+    const status = consult.status;
+    const consultationId = consult.id;
+    
+    // Cas particulier : validation directe
+    if (consult.directValidation === true) {
+        return `<button class="btn btn-sm btn-info btn-action" onclick="viewReport(${consultationId})">
+                    <i class="fas fa-file-alt"></i> Voir rapport
+                </button>`;
+    }
+    
+    if (status === 'consultation_completed') {
+        return `<button class="btn btn-sm btn-primary btn-action" onclick="continueConsultation(${consultationId}, '/upload')">
+                    <i class="fas fa-upload"></i> Upload CT
+                </button>`;
+    }
+    
+    if (status === 'ct_uploaded') {
+        return `<button class="btn btn-sm btn-primary btn-action" onclick="continueConsultation(${consultationId}, '/predict')">
+                    <i class="fas fa-microscope"></i> Analyser
+                </button>`;
+    }
+    
+    if (status === 'predicted') {
+        return `<button class="btn btn-sm btn-primary btn-action" onclick="continueConsultation(${consultationId}, '/tumor-staging')">
+                    <i class="fas fa-chart-line"></i> Décision
+                </button>`;
+    }
+    
+    if (status === 'additional_tests_needed' || status === 'additional_tests_draft') {
+        return `<button class="btn btn-sm btn-warning btn-action" onclick="continueConsultation(${consultationId}, '/additional-tests')">
+                    <i class="fas fa-flask"></i> Accéder aux examens
+                </button>`;
+    }
+    
+    if (status === 'valide' || status === 'rejete') {
+        return `<button class="btn btn-sm btn-info btn-action" onclick="viewReport(${consultationId})">
+                    <i class="fas fa-file-alt"></i> Voir rapport
+                </button>`;
+    }
+    
+    return '';
+}
+
+// Fonction pour continuer une consultation
+function continueConsultation(consultationId, url) {
+    let consultation = allConsultations.find(c => c.id === consultationId);
+    if (consultation) {
+        localStorage.setItem('currentConsultation', JSON.stringify(consultation));
+        window.location.href = url;
+    } else {
+        alert('Consultation non trouvée');
+    }
+}
+
+// Fonction pour voir le rapport
+function viewReport(consultationId) {
+    window.location.href = `/report?consultation_id=${consultationId}`;
+}
+
+// Formater la date et l'heure
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+}
+
+// Afficher les consultations
+function displayConsultations(consultations, targetTableId) {
+    const tbody = $(`#${targetTableId} tbody`);
+    tbody.empty();
+    
+    if (consultations.length === 0) {
+        tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune consultation trouvée</td></tr>');
+        return;
+    }
+    
+    consultations.forEach(consult => {
+        if (!consult || !consult.patient) return;
+        
+        const patientId = consult.patientId || `PAT-${consult.id.toString().slice(-4)}`;
+        
+        let diagnostic = '-';
+        if (consult.directValidation) {
+            diagnostic = 'Normal - Pas de signes de cancer';
+        } else if (consult.finalDiagnosis) {
+            diagnostic = classNames[consult.finalDiagnosis.predictedClass] || consult.finalDiagnosis.predictedClass;
+        } else if (consult.vitResults) {
+            diagnostic = classNames[consult.vitResults.predictedClass] || consult.vitResults.predictedClass;
+        }
+        
+        tbody.append(`
+            <tr>
+                <td><code>${patientId}</code></td>
+                <td>
+                    <strong>${consult.patient.name || 'Inconnu'}</strong><br>
+                    <small class="text-muted">${consult.patient.age || '?'} ans</small>
+                </td>
+                <td><small>${formatDateTime(consult.createdAt)}</small></td>
+                <td><span class="step-badge step-${getStepNumber(consult.status)}">${getStepLabel(consult.status)}</span></td>
+                <td>${getStatusBadge(consult.status)}</td>
+                <td><strong>${diagnostic}</strong></td>
+                <td>${getActionButton(consult)}</td>
+            </tr>
+        `);
+    });
+}
+
+// Mettre à jour les statistiques
+function updateStats() {
+    const total = allConsultations.length;
+    const enCours = allConsultations.filter(c => c.status !== 'valide' && c.status !== 'rejete').length;
+    const termines = allConsultations.filter(c => c.status === 'valide' || c.status === 'rejete').length;
+    const alertes = allConsultations.filter(c => c.vitResults?.confidence < 0.7).length;
+    
+    $('#totalExamens').text(total);
+    $('#enCours').text(enCours);
+    $('#termines').text(termines);
+    $('#alertes').text(alertes);
+}
+
+// Afficher le tableau de bord
+function displayDashboard() {
+    const active = allConsultations.filter(c => c.status !== 'valide' && c.status !== 'rejete');
+    displayConsultations(active, 'activeTable');
+}
+
+// Rechercher des consultations
+function searchConsultations() {
+    const searchId = $('#searchId').val().toLowerCase().trim();
+    const searchName = $('#searchName').val().toLowerCase().trim();
+    const searchDate = $('#searchDate').val();
+    
+    let results = [...allConsultations];
+    
+    if (searchId) {
+        results = results.filter(c => (c.patientId || '').toLowerCase().includes(searchId) || 
+                                      c.id.toString().includes(searchId));
+    }
+    
+    if (searchName) {
+        results = results.filter(c => c.patient.name.toLowerCase().includes(searchName));
+    }
+    
+    if (searchDate) {
+        results = results.filter(c => {
+            const consultDate = new Date(c.createdAt).toLocaleDateString();
+            return consultDate === new Date(searchDate).toLocaleDateString();
+        });
+    }
+    
+    if (searchId || searchName || searchDate) {
+        $('#searchResultsSection').show();
+        $('#resultCount').text(results.length);
+        displayConsultations(results, 'searchResultsTable');
+        
+        let searchInfo = `<span class="text-success"><i class="fas fa-check-circle"></i> ${results.length} consultation(s) trouvée(s)`;
+        if (searchId) searchInfo += ` pour ID: "${searchId}"`;
+        if (searchName) searchInfo += ` pour nom: "${searchName}"`;
+        if (searchDate) searchInfo += ` pour date: ${searchDate}`;
+        searchInfo += `</span>`;
+        $('#searchInfo').html(searchInfo);
+    } else {
+        $('#searchResultsSection').hide();
+        $('#searchInfo').html('');
+    }
+}
+
+// Effacer la recherche
+function clearSearch() {
+    $('#searchId, #searchName, #searchDate').val('');
+    $('#searchResultsSection').hide();
+    $('#searchInfo').html('');
+    displayDashboard();
+}
+
+// Charger le tableau de bord
+function loadDashboard() {
+    allConsultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+    allConsultations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    updateStats();
+    displayDashboard();
+}
+
+// Initialisation
+$(document).ready(function() {
+    loadDashboard();
+    
+    $('#searchBtn').click(searchConsultations);
+    $('#clearSearchBtn').click(clearSearch);
+    
+    let searchTimeout;
+    $('#searchId, #searchName, #searchDate').on('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(searchConsultations, 500);
+    });
+});
+</script>
+{% endblock %}

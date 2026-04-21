@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block content %}
+<h2><i class="fas fa-upload"></i> Téléversement du CT Scan</h2>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    <strong>Patient:</strong> <span id="patientName">-</span> | 
+    <strong>ID:</strong> <span id="patientId"></span>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-camera"></i> Scanner Thoracique
+            </div>
+            <div class="card-body">
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <label class="form-label">Sélectionner l'image CT</label>
+                        <input type="file" id="imageFile" class="form-control" accept="image/*" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="uploadBtn">
+                        <i class="fas fa-cloud-upload-alt"></i> Téléverser
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Prévisualisation</div>
+            <div class="card-body text-center">
+                <img id="preview" src="#" style="max-width:100%; display:none;">
+                <div id="uploadResult" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Récupérer la consultation depuis localStorage
+let currentConsultation = JSON.parse(localStorage.getItem('currentConsultation') || '{}');
+
+if (!currentConsultation.id) {
+    alert('⚠️ Aucune consultation. Veuillez d\'abord créer une consultation.');
+    window.location.href = '/first-consultation';
+}
+
+$('#patientName').text(currentConsultation.patient.name);
+$('#patientId').text(currentConsultation.patientId || 'N/A');
+
+// Fonction pour synchroniser la consultation avec MySQL
+async function syncConsultationToDatabase() {
+    console.log('🔄 Synchronisation de la consultation...');
+    
+    const consultationData = {
+        consultation_id: currentConsultation.id.toString(),
+        patient_id: currentConsultation.patientId || `PAT-${currentConsultation.id}`,
+        patient_name: currentConsultation.patient.name,
+        patient_age: currentConsultation.patient.age,
+        patient_gender: currentConsultation.patient.gender,
+        smoking_status: currentConsultation.smoking?.status || 'never',
+        smoking_years: currentConsultation.smoking?.years || 0,
+        packs_per_day: currentConsultation.smoking?.packsPerDay || 0,
+        pack_years: currentConsultation.smoking?.packYears || 0,
+        passive_smoking: currentConsultation.smoking?.passiveSmoking || false,
+        clinical_suspicion: currentConsultation.clinicalSuspicion || 'moderate',
+        urgency_level: currentConsultation.urgencyLevel || 'medium',
+        initial_suspicion: currentConsultation.initialSuspicion || '',
+        clinical_notes: currentConsultation.clinicalNotes || '',
+        symptoms: currentConsultation.symptoms || {}
+    };
+    
+    try {
+        const response = await fetch('/api/save_consultation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(consultationData)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Consultation synchronisée, MySQL ID:', result.id);
+            // Mettre à jour l'ID MySQL dans localStorage
+            currentConsultation.mysql_id = result.id;
+            localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+            return result.id;
+        } else {
+            console.error('❌ Erreur synchronisation:', result.error);
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Erreur réseau:', error);
+        return null;
+    }
+}
+
+// Upload de l'image
+$('#uploadForm').submit(async function(e) {
+    e.preventDefault();
+    
+    let file = $('#imageFile')[0].files[0];
+    if (!file) {
+        alert('Veuillez sélectionner une image');
+        return;
+    }
+    
+    // Prévisualisation
+    const imageUrl = URL.createObjectURL(file);
+    $('#preview').attr('src', imageUrl).show();
+    $('#uploadResult').html('<div class="alert alert-info">📤 Synchronisation en cours...</div>');
+    $('#uploadBtn').prop('disabled', true);
+    
+    // 1. D'abord, synchroniser la consultation avec MySQL
+    const mysqlId = await syncConsultationToDatabase();
+    
+    if (!mysqlId) {
+        $('#uploadResult').html('<div class="alert alert-danger">❌ Erreur de synchronisation. Veuillez réessayer.</div>');
+        $('#uploadBtn').prop('disabled', false);
+        return;
+    }
+    
+    // 2. Ensuite, uploader l'image avec l'ID MySQL
+    $('#uploadResult').html('<div class="alert alert-info">📤 Téléversement de l\'image...</div>');
+    
+    let formData = new FormData();
+    formData.append('image', file);
+    formData.append('consultation_id', mysqlId);
+    formData.append('nom', currentConsultation.patient.name.split(' ')[0] || 'Patient');
+    formData.append('prenom', currentConsultation.patient.name.split(' ')[1] || '');
+    
+    $.ajax({
+        url: '/api/upload_image',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            console.log('Upload réussi:', res);
+            
+            // Mettre à jour localStorage
+            currentConsultation.imagePath = res.image_url;
+            currentConsultation.status = 'ct_uploaded';
+            currentConsultation.examen_id = res.examen_id;
+            localStorage.setItem('currentConsultation', JSON.stringify(currentConsultation));
+            
+            // Mettre à jour la liste
+            let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+            const idx = consultations.findIndex(c => c.id === currentConsultation.id);
+            if (idx !== -1) {
+                consultations[idx] = currentConsultation;
+                localStorage.setItem('consultations', JSON.stringify(consultations));
+            }
+            
+            $('#uploadResult').html('<div class="alert alert-success">✅ Image téléversée ! Redirection...</div>');
+            
+            setTimeout(() => {
+                window.location.href = `/predict?consultation_id=${mysqlId}`;
+            }, 1500);
+        },
+        error: function(xhr) {
+            console.error('Erreur upload:', xhr);
+            $('#uploadResult').html('<div class="alert alert-danger">❌ Erreur: ' + (xhr.responseText || 'Inconnue') + '</div>');
+            $('#uploadBtn').prop('disabled', false);
+        }
+    });
+});
+
+$('#imageFile').change(function(e) {
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        $('#preview').attr('src', ev.target.result).show();
+    };
+    reader.readAsDataURL(e.target.files[0]);
+});
+</script>
+{% endblock %}

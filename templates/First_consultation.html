@@ -1,0 +1,634 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .symptom-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border-left: 4px solid #e5e7eb;
+    }
+    .symptom-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .symptom-selected {
+        background-color: #dc2626 !important;
+        color: white !important;
+        border-left-color: #991b1b !important;
+    }
+    .symptom-selected .text-muted {
+        color: rgba(255,255,255,0.8) !important;
+    }
+    .symptom-selected .badge {
+        background-color: white !important;
+        color: #dc2626 !important;
+    }
+    .severity-slider {
+        width: 100%;
+        margin-top: 10px;
+    }
+    .required-field::after {
+        content: " *";
+        color: red;
+    }
+    .step-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        padding: 0 20px;
+    }
+    .step {
+        text-align: center;
+        flex: 1;
+        position: relative;
+    }
+    .step .circle {
+        width: 40px;
+        height: 40px;
+        background-color: #e5e7eb;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-weight: bold;
+        color: #6b7280;
+    }
+    .step.active .circle {
+        background-color: #3b82f6;
+        color: white;
+    }
+    .step .label {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    .step.active .label {
+        color: #3b82f6;
+        font-weight: bold;
+    }
+    .direct-validation-card {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        border: 2px solid #10b981;
+    }
+    .warning-card {
+        background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+        border: 2px solid #f97316;
+    }
+</style>
+
+<div class="step-indicator">
+    <div class="step active">
+        <div class="circle">1</div>
+        <div class="label">Consultation</div>
+    </div>
+    <div class="step">
+        <div class="circle">2</div>
+        <div class="label">CT Scan</div>
+    </div>
+    <div class="step">
+        <div class="circle">3</div>
+        <div class="label">Analyse IA</div>
+    </div>
+    <div class="step">
+        <div class="circle">4</div>
+        <div class="label">Décision</div>
+    </div>
+    <div class="step">
+        <div class="circle">5</div>
+        <div class="label">Finalisation</div>
+    </div>
+</div>
+
+<h2 class="mb-4">
+    <i class="fas fa-stethoscope"></i> 
+    Consultation Initiale - Évaluation des symptômes
+</h2>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-user"></i> Informations Patient
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ID Patient</label>
+                    <input type="text" id="patientId" class="form-control" placeholder="P001">
+                    <small class="text-muted">Laissez vide pour génération automatique</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold required-field">Nom complet</label>
+                    <input type="text" id="patientName" class="form-control" placeholder="Dupont Jean">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold required-field">Âge</label>
+                        <input type="number" id="patientAge" class="form-control" placeholder="65">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Sexe</label>
+                        <select id="patientGender" class="form-select">
+                            <option value="M">Homme</option>
+                            <option value="F">Femme</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-smoking"></i> Facteurs de Risque Tabagique
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Statut tabagique</label>
+                    <select id="smokingStatus" class="form-select">
+                        <option value="never">Non-fumeur</option>
+                        <option value="former">Ancien fumeur</option>
+                        <option value="current">Fumeur actif</option>
+                    </select>
+                </div>
+                <div id="smokingDetails" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Durée de tabagisme (années)</label>
+                        <input type="number" id="smokingYears" class="form-control" placeholder="30">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Paquets par jour</label>
+                        <input type="number" id="packsPerDay" class="form-control" placeholder="1" step="0.5">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Paquets-années</label>
+                        <input type="text" id="packYears" class="form-control" readonly style="background-color: #f0f0f0;">
+                        <small class="text-muted">(Paquets par jour × Années de tabagisme)</small>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tabagisme passif</label>
+                    <select id="passiveSmoking" class="form-select">
+                        <option value="no">Non</option>
+                        <option value="yes">Oui, exposé</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <i class="fas fa-chart-line"></i> Évaluation Clinique
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Niveau de suspicion clinique</label>
+                    <select id="clinicalSuspicion" class="form-select">
+                        <option value="low">🟢 Faible</option>
+                        <option value="moderate">🟡 Modéré</option>
+                        <option value="high">🟠 Élevé</option>
+                        <option value="very_high">🔴 Très élevé</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Niveau d'urgence</label>
+                    <select id="urgencyLevel" class="form-select">
+                        <option value="low">🟢 Basse - Consultation standard</option>
+                        <option value="medium">🟡 Moyenne - Scanner à programmer</option>
+                        <option value="high">🟠 Haute - Scanner urgent</option>
+                        <option value="critical">🔴 Critique - Hospitalisation / Scanner immédiat</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card mb-4">
+            <div class="card-header bg-danger text-white">
+                <i class="fas fa-head-side-cough"></i> Symptômes Cliniques
+                <small class="float-end">Cliquez sur un symptôme pour le sélectionner</small>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Symptômes d'alerte (cancer) :</strong> Hémoptysie, Perte de poids >10%, Dysphagie, Enrouement persistant, Syndrome de veine cave
+                </div>
+                <div class="row" id="symptomsList"></div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-file-alt"></i> Suspicion Diagnostique
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Diagnostic différentiel</label>
+                    <textarea id="initialSuspicion" rows="3" class="form-control"
+                        placeholder="Ex: Suspicion d'adénocarcinome pulmonaire. Diagnostics alternatifs: tuberculose, pneumopathie infectieuse, sarcoïdose..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <i class="fas fa-notes-medical"></i> Notes Cliniques
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Observations cliniques</label>
+                    <textarea id="clinicalNotes" rows="3" class="form-control"
+                        placeholder="Antécédents médicaux, examen clinique, traitements en cours, allergies..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Validation directe (si pas de symptômes d'alerte) -->
+        <div class="card mb-4 direct-validation-card" id="directValidationSection" style="display: none;">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-check-circle"></i> Validation directe
+            </div>
+            <div class="card-body">
+                <div class="alert alert-success">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Aucun symptôme d'alerte détecté</strong><br>
+                    Le patient ne présente aucun symptôme évocateur de cancer pulmonaire. 
+                    Vous pouvez valider directement cette consultation comme "Normale" sans passer par le CT scan.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Justification médicale <span class="text-danger">*</span></label>
+                    <textarea id="validationNotes" rows="3" class="form-control" 
+                        placeholder="Ex: Les symptômes présentés sont en faveur d'une pathologie bénigne (infection respiratoire, reflux gastro-œsophagien, allergie...). Absence de signes de gravité."></textarea>
+                </div>
+                <button id="validateDirectBtn" class="btn btn-success btn-lg w-100">
+                    <i class="fas fa-check-circle"></i> Valider comme consultation normale
+                </button>
+            </div>
+        </div>
+
+        <!-- Section Attention (si symptômes d'alerte présents) -->
+        <div class="card mb-4 warning-card" id="warningSection" style="display: none;">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-exclamation-triangle"></i> Attention - Symptômes d'alerte détectés
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Des symptômes évocateurs de cancer pulmonaire ont été identifiés</strong><br>
+                    Un CT scan est nécessaire pour éliminer une pathologie maligne.
+                </div>
+                <p class="mb-0">Veuillez poursuivre vers le CT scan pour une analyse plus approfondie.</p>
+            </div>
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="row">
+            <div class="col-md-6">
+                <button id="saveOnlyBtn" class="btn btn-secondary w-100 mb-2">
+                    <i class="fas fa-save"></i> Sauvegarder (brouillon)
+                </button>
+            </div>
+            <div class="col-md-6">
+                <button id="saveAndContinueBtn" class="btn btn-primary w-100">
+                    <i class="fas fa-arrow-right"></i> Sauvegarder et continuer (CT Scan)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Symptoms data
+const symptomsData = [
+    { id: 'hemoptysis', name: 'Hémoptysie', description: 'Crachats de sang', alert: true, severity: true },
+    { id: 'weightLoss', name: 'Perte de poids inexpliquée', description: '>10% en 6 mois', alert: true, severity: true },
+    { id: 'dysphagia', name: 'Dysphagie', description: 'Difficulté à avaler', alert: true, severity: true },
+    { id: 'hoarseness', name: 'Enrouement', description: 'Persistant >2 semaines', alert: true, severity: true },
+    { id: 'svcSyndrome', name: 'Syndrome de veine cave supérieure', description: 'Œdème du visage, dilatation veineuse', alert: true, severity: true },
+    { id: 'persistentCough', name: 'Toux persistante', description: '>3 semaines', alert: false, severity: true },
+    { id: 'dyspnea', name: 'Dyspnée', description: 'Essoufflement', alert: false, severity: true },
+    { id: 'chestPain', name: 'Douleur thoracique', description: 'Douleur à la poitrine', alert: false, severity: true },
+    { id: 'wheezing', name: 'Sibilants', description: 'Respiration sifflante', alert: false, severity: true },
+    { id: 'fingerClubbing', name: 'Hippocratisme digital', description: 'Doigts en baguette de tambour', alert: false, severity: false }
+];
+
+let selectedSymptoms = {};
+
+// Populate symptoms
+function populateSymptoms() {
+    const container = $('#symptomsList');
+    container.empty();
+    
+    symptomsData.forEach(symptom => {
+        const col = $(`
+            <div class="col-md-6 mb-3">
+                <div class="card symptom-card" data-symptom="${symptom.id}">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1 fw-bold">
+                                    ${symptom.name}
+                                    ${symptom.alert ? '<span class="badge bg-danger ms-2">Alerte Cancer</span>' : ''}
+                                </h6>
+                                <small class="text-muted">${symptom.description}</small>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input symptom-checkbox" id="chk_${symptom.id}">
+                            </div>
+                        </div>
+                        ${symptom.severity ? `
+                        <div class="severity-slider mt-2" style="display: none;">
+                            <label class="small">Sévérité (1-10):</label>
+                            <input type="range" class="form-range severity-range" min="1" max="10" value="5">
+                            <span class="severity-value small">5/10</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `);
+        
+        container.append(col);
+        
+        const checkbox = col.find('.symptom-checkbox');
+        const card = col.find('.symptom-card');
+        const severityDiv = col.find('.severity-slider');
+        const severityRange = col.find('.severity-range');
+        const severityValue = col.find('.severity-value');
+        
+        checkbox.change(function() {
+            if ($(this).is(':checked')) {
+                card.addClass('symptom-selected');
+                if (severityDiv.length) severityDiv.show();
+                selectedSymptoms[symptom.id] = { severity: severityRange.length ? parseInt(severityRange.val()) : 5 };
+            } else {
+                card.removeClass('symptom-selected');
+                if (severityDiv.length) severityDiv.hide();
+                delete selectedSymptoms[symptom.id];
+            }
+            updateDirectValidationVisibility();
+        });
+        
+        if (severityRange.length) {
+            severityRange.on('input', function() {
+                const val = $(this).val();
+                severityValue.text(val + '/10');
+                if (selectedSymptoms[symptom.id]) {
+                    selectedSymptoms[symptom.id].severity = parseInt(val);
+                }
+            });
+        }
+    });
+}
+
+// Vérifier s'il y a des symptômes d'alerte (cancer)
+function hasAlertSymptoms() {
+    const alertSymptoms = ['hemoptysis', 'weightLoss', 'dysphagia', 'hoarseness', 'svcSyndrome'];
+    return alertSymptoms.some(s => selectedSymptoms[s]);
+}
+
+// Vérifier s'il y a des symptômes non-alerte
+function hasNonAlertSymptoms() {
+    const alertSymptoms = ['hemoptysis', 'weightLoss', 'dysphagia', 'hoarseness', 'svcSyndrome'];
+    return Object.keys(selectedSymptoms).some(s => !alertSymptoms.includes(s));
+}
+
+// Mettre à jour l'affichage de la validation directe
+function updateDirectValidationVisibility() {
+    const hasAlert = hasAlertSymptoms();
+    const hasNonAlert = hasNonAlertSymptoms();
+    
+    if (!hasAlert) {
+        // Pas de symptômes d'alerte -> validation directe possible
+        $('#directValidationSection').show();
+        $('#warningSection').hide();
+        $('#saveAndContinueBtn').html('<i class="fas fa-arrow-right"></i> Sauvegarder et continuer (CT Scan recommandé)');
+        
+        if (hasNonAlert) {
+            $('#directValidationSection .alert-success').html(`
+                <i class="fas fa-info-circle"></i>
+                <strong>Symptômes non-alerte détectés</strong><br>
+                Les symptômes présentés ne sont pas des signes d'alerte de cancer pulmonaire. 
+                Vous pouvez tout de même valider directement ou réaliser un CT scan pour plus de sécurité.
+            `);
+        } else {
+            $('#directValidationSection .alert-success').html(`
+                <i class="fas fa-info-circle"></i>
+                <strong>Aucun symptôme d'alerte détecté</strong><br>
+                Le patient ne présente aucun symptôme évocateur de cancer pulmonaire. 
+                Vous pouvez valider directement cette consultation comme "Normale".
+            `);
+        }
+    } else {
+        // Présence de symptômes d'alerte -> CT scan obligatoire
+        $('#directValidationSection').hide();
+        $('#warningSection').show();
+        $('#saveAndContinueBtn').html('<i class="fas fa-arrow-right"></i> Sauvegarder et continuer (CT Scan obligatoire)');
+    }
+}
+
+// Calculer les paquets-années
+function calculatePackYears() {
+    const years = parseInt($('#smokingYears').val()) || 0;
+    const packs = parseFloat($('#packsPerDay').val()) || 0;
+    $('#packYears').val((years * packs).toFixed(1));
+}
+
+// Générer l'ID patient
+function generatePatientId(consult) {
+    const name = consult.patient.name.replace(/\s/g, '').substring(0, 6).toUpperCase();
+    const date = new Date(consult.createdAt);
+    const idNum = consult.id.toString().slice(-4);
+    return `${name}-${date.getDate()}${date.getMonth()+1}-${idNum}`;
+}
+
+// Validation directe (sans CT scan)
+function validateDirect() {
+    const validationNotes = $('#validationNotes').val().trim();
+    
+    if (!validationNotes) {
+        alert('❌ Veuillez justifier votre décision (diagnostic différentiel, orientation vers autre spécialité, etc.)');
+        $('#validationNotes').focus();
+        return;
+    }
+    
+    if (!$('#patientName').val().trim()) {
+        alert('❌ Veuillez entrer le nom du patient');
+        $('#patientName').focus();
+        return;
+    }
+    
+    if (!$('#patientAge').val() || parseInt($('#patientAge').val()) <= 0) {
+        alert('❌ Veuillez entrer un âge valide');
+        $('#patientAge').focus();
+        return;
+    }
+    
+    const consultationData = {
+        id: Date.now(),
+        patientId: $('#patientId').val().trim() || null,
+        patient: {
+            name: $('#patientName').val().trim(),
+            age: parseInt($('#patientAge').val()),
+            gender: $('#patientGender').val()
+        },
+        smoking: {
+            status: $('#smokingStatus').val(),
+            years: parseInt($('#smokingYears').val()) || 0,
+            packsPerDay: parseFloat($('#packsPerDay').val()) || 0,
+            packYears: parseFloat($('#packYears').val()) || 0,
+            passiveSmoking: $('#passiveSmoking').val() === 'yes'
+        },
+        symptoms: selectedSymptoms,
+        clinicalSuspicion: 'low',
+        urgencyLevel: 'low',
+        initialSuspicion: $('#initialSuspicion').val().trim() || 'Absence de symptômes évocateurs de cancer pulmonaire',
+        clinicalNotes: $('#clinicalNotes').val().trim(),
+        validationNotes: validationNotes,
+        createdAt: new Date().toISOString(),
+        status: 'valide',
+        directValidation: true,
+        noCtScan: true,
+        vitResults: {
+            predictedClass: 'normal',
+            confidence: 1.0,
+            date: new Date().toISOString(),
+            note: 'Validation médicale directe - absence de symptômes d\'alerte'
+        },
+        finalDiagnosis: {
+            predictedClass: 'normal',
+            stage: 'Stade 0',
+            conclusionNotes: validationNotes,
+            validatedAt: new Date().toISOString(),
+            doctorNotes: 'Consultation normale - pas de signes de cancer pulmonaire'
+        }
+    };
+    
+    // Générer l'ID patient
+    if (!consultationData.patientId) {
+        consultationData.patientId = generatePatientId(consultationData);
+    }
+    
+    // Sauvegarder
+    let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+    consultations.push(consultationData);
+    localStorage.setItem('consultations', JSON.stringify(consultations));
+    localStorage.setItem('currentConsultation', JSON.stringify(consultationData));
+    
+    alert(`✅ Consultation validée comme normale !\n\n🆔 ID Patient: ${consultationData.patientId}\n\nLe patient ne présente pas de signes de cancer pulmonaire.\nJustification: ${validationNotes.substring(0, 100)}...`);
+    window.location.href = '/dashboard';
+}
+
+// Sauvegarde normale (brouillon)
+function saveConsultation(redirect = false) {
+    if (!$('#patientName').val().trim()) {
+        alert('❌ Veuillez entrer le nom du patient');
+        $('#patientName').focus();
+        return false;
+    }
+    
+    if (!$('#patientAge').val() || parseInt($('#patientAge').val()) <= 0) {
+        alert('❌ Veuillez entrer un âge valide');
+        $('#patientAge').focus();
+        return false;
+    }
+    
+    const consultationData = {
+        id: Date.now(),
+        patientId: $('#patientId').val().trim() || null,
+        patient: {
+            name: $('#patientName').val().trim(),
+            age: parseInt($('#patientAge').val()),
+            gender: $('#patientGender').val()
+        },
+        smoking: {
+            status: $('#smokingStatus').val(),
+            years: parseInt($('#smokingYears').val()) || 0,
+            packsPerDay: parseFloat($('#packsPerDay').val()) || 0,
+            packYears: parseFloat($('#packYears').val()) || 0,
+            passiveSmoking: $('#passiveSmoking').val() === 'yes'
+        },
+        symptoms: selectedSymptoms,
+        clinicalSuspicion: $('#clinicalSuspicion').val(),
+        urgencyLevel: $('#urgencyLevel').val(),
+        initialSuspicion: $('#initialSuspicion').val().trim(),
+        clinicalNotes: $('#clinicalNotes').val().trim(),
+        createdAt: new Date().toISOString(),
+        status: 'consultation_completed',
+        vitResults: null,
+        staging: null,
+        finalDiagnosis: null,
+        imagePath: null
+    };
+    
+    if (!consultationData.patientId) {
+        consultationData.patientId = generatePatientId(consultationData);
+    }
+    
+    let consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+    consultations.push(consultationData);
+    localStorage.setItem('consultations', JSON.stringify(consultations));
+    localStorage.setItem('currentConsultation', JSON.stringify(consultationData));
+    
+    if (redirect) {
+        alert(`✅ Consultation enregistrée !\n🆔 ID Patient: ${consultationData.patientId}\n\n➡️ Redirection vers le CT Scan...`);
+        window.location.href = '/upload';
+    } else {
+        alert(`💾 Consultation sauvegardée (brouillon)\n🆔 ID Patient: ${consultationData.patientId}`);
+    }
+    return true;
+}
+
+// Événements
+$('#smokingStatus').change(function() {
+    if ($(this).val() !== 'never') {
+        $('#smokingDetails').show();
+        calculatePackYears();
+    } else {
+        $('#smokingDetails').hide();
+        $('#smokingYears, #packsPerDay, #packYears').val('');
+    }
+});
+
+$('#smokingYears, #packsPerDay').on('input', calculatePackYears);
+
+$('#saveOnlyBtn').click(function() {
+    saveConsultation(false);
+});
+
+$('#saveAndContinueBtn').click(function() {
+    saveConsultation(true);
+});
+
+$('#validateDirectBtn').click(validateDirect);
+
+// Initialisation
+$(document).ready(function() {
+    populateSymptoms();
+    updateDirectValidationVisibility();
+    
+    // Charger une consultation existante
+    const existing = localStorage.getItem('currentConsultation');
+    if (existing) {
+        const data = JSON.parse(existing);
+        if (data.status !== 'consultation_completed' && data.status !== 'valide' && confirm('Une consultation est en cours. Voulez-vous la reprendre ?')) {
+            $('#patientId').val(data.patientId || '');
+            $('#patientName').val(data.patient.name);
+            $('#patientAge').val(data.patient.age);
+            $('#patientGender').val(data.patient.gender);
+            $('#smokingStatus').val(data.smoking.status).trigger('change');
+            $('#smokingYears, #packsPerDay').val(data.smoking.years || '').trigger('input');
+            $('#passiveSmoking').val(data.smoking.passiveSmoking ? 'yes' : 'no');
+            $('#clinicalSuspicion, #urgencyLevel').val(data.clinicalSuspicion);
+            $('#initialSuspicion, #clinicalNotes').val(data.initialSuspicion || data.clinicalNotes);
+            
+            for (let [id, sym] of Object.entries(data.symptoms || {})) {
+                $(`#chk_${id}`).prop('checked', true).trigger('change');
+                if (sym.severity) {
+                    $(`#chk_${id}`).closest('.col-md-6').find('.severity-range').val(sym.severity).trigger('input');
+                }
+            }
+            updateDirectValidationVisibility();
+        }
+    }
+});
+</script>
+{% endblock %}

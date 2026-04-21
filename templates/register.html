@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-body p-5">
+                <h3 class="text-center mb-4"><i class="fas fa-user-md me-2"></i>Inscription médecin</h3>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label>Nom complet</label>
+                        <input type="text" name="full_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Nom d'utilisateur</label>
+                        <input type="text" name="username" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Email</label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Spécialité</label>
+                        <input type="text" name="specialty" class="form-control" placeholder="Radiologue, Pneumologue, ...">
+                    </div>
+                    <div class="mb-3">
+                        <label>Mot de passe</label>
+                        <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg rounded-pill">Créer mon compte</button>
+                </form>
+                <p class="text-center mt-3">Déjà inscrit ? <a href="{{ url_for('login') }}">Se connecter</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
